@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-section">
+        <span class="logo">🦉</span>
+        <h1>Owl Price Checker</h1>
+      </div>
+      <div class="status" id="status">Loading...</div>
+    </header>
+    
+    <div id="content">
+      <!-- Product Info Section -->
+      <div id="productInfo" class="product-info hidden">
+        <img id="productImage" src="" alt="Product">
+        <div class="product-details">
+          <h2 id="productTitle"></h2>
+          <div class="current-price">
+            Current Price: <span id="currentPrice"></span>
+          </div>
+          <div class="site-name">
+            on <span id="siteName"></span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Price Comparisons Section -->
+      <div id="comparisons" class="comparisons hidden">
+        <h3>🔍 Price Comparison</h3>
+        <div id="comparisonList"></div>
+      </div>
+      
+      <!-- No Product Message -->
+      <div id="noProduct" class="no-product">
+        <div class="owl-icon">🦉</div>
+        <p>Navigate to any product page to see price comparisons.</p>
+        <p class="supported-sites">Works on any e-commerce website!</p>
+        <div class="example-sites">
+          <p>Popular sites include:</p>
+          <p>Amazon • eBay • Walmart • Target • Best Buy</p>
+          <p>Etsy • AliExpress • Shopify stores • And more!</p>
+        </div>
+      </div>
+    </div>
+    
+    <footer>
+      <a href="privacy.html" target="_blank" class="privacy-link">Privacy Settings</a>
+    </footer>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

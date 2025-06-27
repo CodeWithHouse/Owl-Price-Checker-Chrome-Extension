@@ -1,0 +1,315 @@
+/* popup.css - Owl Price Checker Styles */
+
+:root {
+  --primary: #D61E37;
+  --secondary: #000a1e;
+  --text-primary: #FFFFFF;
+  --hover-primary: #B01830;
+  --light-bg: #f5f5f5;
+  --success: #0F9D58;
+  --warning: #F4B400;
+}
+
+body {
+  width: 420px;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--light-bg);
+  color: var(--secondary);
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+
+header {
+  background: var(--secondary);
+  color: var(--text-primary);
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.logo {
+  font-size: 28px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.status {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-top: 5px;
+  color: var(--text-primary);
+}
+
+#content {
+  flex: 1;
+  padding: 20px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Product Info Styles */
+.product-info {
+  display: flex;
+  gap: 15px;
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  margin-bottom: 20px;
+  border: 1px solid rgba(214, 30, 55, 0.1);
+}
+
+#productImage {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--light-bg);
+  padding: 5px;
+}
+
+.product-details {
+  flex: 1;
+}
+
+#productTitle {
+  font-size: 14px;
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+  max-height: 2.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--secondary);
+}
+
+.current-price {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--primary);
+}
+
+.current-price span {
+  font-size: 20px;
+}
+
+.site-name {
+  font-size: 13px;
+  color: #666;
+  margin-top: 5px;
+}
+
+.site-name span {
+  font-weight: 600;
+  color: var(--secondary);
+}
+
+/* Comparisons Styles */
+.comparisons {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.comparisons h3 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  color: var(--secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-item {
+  background: var(--light-bg);
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.comparison-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(214, 30, 55, 0.15);
+  border-color: var(--primary);
+  background: white;
+}
+
+.site-info {
+  flex: 1;
+}
+
+.site-name {
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: var(--secondary);
+}
+
+.site-price {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--secondary);
+}
+
+.price-diff {
+  text-align: right;
+}
+
+.diff-amount {
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.diff-percent {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.cheaper {
+  color: var(--success);
+}
+
+.expensive {
+  color: var(--primary);
+}
+
+.not-available {
+  opacity: 0.5;
+}
+
+.not-available .site-price {
+  text-decoration: line-through;
+}
+
+/* No Product Message */
+.no-product {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--secondary);
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.owl-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  filter: grayscale(0.2);
+}
+
+.no-product p {
+  margin: 15px 0;
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+.supported-sites {
+  font-size: 16px;
+  color: var(--primary);
+  font-weight: 600;
+  background: rgba(214, 30, 55, 0.1);
+  padding: 10px;
+  border-radius: 6px;
+  margin: 20px 0;
+}
+
+.example-sites {
+  margin-top: 20px;
+  padding: 15px;
+  background: var(--light-bg);
+  border-radius: 8px;
+}
+
+.example-sites p:first-child {
+  font-weight: 600;
+  color: var(--secondary);
+  margin-bottom: 10px;
+}
+
+.example-sites p:last-child {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+/* Footer */
+footer {
+  padding: 15px 20px;
+  background: white;
+  border-top: 1px solid #e0e0e0;
+  text-align: center;
+}
+
+.privacy-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.3s;
+}
+
+.privacy-link:hover {
+  color: var(--hover-primary);
+  text-decoration: underline;
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--secondary);
+}
+
+.loading::after {
+  content: "...";
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%, 20% { content: ""; }
+  40% { content: "."; }
+  60% { content: ".."; }
+  80%, 100% { content: "..."; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--light-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--hover-primary);
+}
