@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Owl Price Checker - Get Exclusive Coupons</title>
+  <link rel="stylesheet" href="auth.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-section">
+        <span class="logo">🦉</span>
+        <h1>Owl Price Checker</h1>
+      </div>
+      <p class="subtitle">Join thousands of smart shoppers saving money every day!</p>
+    </div>
+    
+    <div class="content">
+      <!-- Benefits Section -->
+      <div class="benefits" id="benefits">
+        <div class="benefit-item">
+          <span class="benefit-icon">🎟️</span>
+          <div class="benefit-text">
+            <strong>Exclusive Coupons</strong>
+            <p>Get access to special discount codes and deals</p>
+          </div>
+        </div>
+        
+        <div class="benefit-item">
+          <span class="benefit-icon">📈</span>
+          <div class="benefit-text">
+            <strong>Price Alerts</strong>
+            <p>Never miss a price drop on your favorite products</p>
+          </div>
+        </div>
+        
+        <div class="benefit-item">
+          <span class="benefit-icon">💰</span>
+          <div class="benefit-text">
+            <strong>Savings Tracker</strong>
+            <p>See how much you've saved with personalized insights</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Authentication Forms -->
+      <div class="auth-section">
+        <!-- Sign Up Form -->
+        <div class="auth-form" id="signupForm">
+          <h2>Create Your Account</h2>
+          <p class="form-subtitle">Start saving money with exclusive coupons!</p>
+          
+          <form id="signupFormElement">
+            <div class="input-group">
+              <label for="firstName">First Name</label>
+              <input type="text" id="firstName" name="firstName" required 
+                     placeholder="Enter your first name">
+            </div>
+            
+            <div class="input-group">
+              <label for="email">Email Address</label>
+              <input type="email" id="email" name="email" required 
+                     placeholder="Enter your email address">
+            </div>
+            
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="agreeTerms" required>
+                <span class="checkmark"></span>
+                I agree to the <a href="#" id="termsLink">Terms of Service</a> and <a href="#" id="privacyLink">Privacy Policy</a>
+              </label>
+            </div>
+            
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="marketingEmails" checked>
+                <span class="checkmark"></span>
+                Send me exclusive coupons and deals via email
+              </label>
+            </div>
+            
+            <button type="submit" class="btn-primary" id="signupBtn">
+              <span class="btn-text">Create Account & Get Coupons</span>
+              <div class="loading-spinner hidden"></div>
+            </button>
+          </form>
+          
+          <p class="switch-form">
+            Already have an account? 
+            <a href="#" id="showLoginForm">Sign in here</a>
+          </p>
+        </div>
+        
+        <!-- Login Form -->
+        <div class="auth-form hidden" id="loginForm">
+          <h2>Welcome Back</h2>
+          <p class="form-subtitle">Sign in to access your coupons and savings</p>
+          
+          <form id="loginFormElement">
+            <div class="input-group">
+              <label for="loginEmail">Email Address</label>
+              <input type="email" id="loginEmail" name="email" required 
+                     placeholder="Enter your email address">
+            </div>
+            
+            <button type="submit" class="btn-primary" id="loginBtn">
+              <span class="btn-text">Sign In</span>
+              <div class="loading-spinner hidden"></div>
+            </button>
+          </form>
+          
+          <p class="switch-form">
+            Don't have an account? 
+            <a href="#" id="showSignupForm">Create one now</a>
+          </p>
+        </div>
+        
+        <!-- Success State -->
+        <div class="success-state hidden" id="successState">
+          <div class="success-icon">🎉</div>
+          <h2>Welcome to Owl Price Checker!</h2>
+          <p id="welcomeMessage">Hi there! Your account has been created successfully.</p>
+          
+          <div class="coupon-preview">
+            <div class="coupon-item">
+              <span class="coupon-icon">🎟️</span>
+              <div class="coupon-details">
+                <strong>Welcome Coupon</strong>
+                <p>Check your email for exclusive deals!</p>
+              </div>
+            </div>
+          </div>
+          
+          <button class="btn-primary" id="continueBtn">
+            Start Comparing Prices
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Error Message -->
+    <div class="error-message hidden" id="errorMessage">
+      <span class="error-icon">⚠️</span>
+      <span class="error-text" id="errorText">Something went wrong. Please try again.</span>
+    </div>
+    
+    <!-- Success Message -->
+    <div class="success-message hidden" id="successMessage">
+      <span class="success-icon">✅</span>
+      <span class="success-text" id="successText">Success!</span>
+    </div>
+  </div>
+  
+  <script src="auth.js"></script>
+</body>
+</html>

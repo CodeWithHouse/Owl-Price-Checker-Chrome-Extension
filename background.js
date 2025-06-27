@@ -54,6 +54,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     clearAllProductData(() => {
       console.log('Cleared product data - no product on page');
     });
+  } else if (request.action === 'openAuth') {
+    // Open authentication window
+    openAuthWindow();
+  } else if (request.action === 'checkAuthStatus') {
+    // Check if user is logged in
+    chrome.storage.local.get(['isLoggedIn', 'user'], (result) => {
+      sendResponse({
+        isLoggedIn: result.isLoggedIn || false,
+        user: result.user || null
+      });
+    });
+    return true; // Keep message channel open for async response
   }
   
   // Handle analytics events from content script
@@ -69,6 +81,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     analytics.page(request.category, request.name, request.properties);
   }
 });
+
+// Open authentication window
+function openAuthWindow() {
+  chrome.windows.create({
+    url: chrome.runtime.getURL('auth.html'),
+    type: 'popup',
+    width: 500,
+    height: 650,
+    focused: true
+  }, (window) => {
+    // Track auth window opened
+    analytics.track('Auth Window Opened', {
+      windowId: window.id
+    });
+  });
+}
 
 // Clear all product-related data
 function clearAllProductData(callback) {
@@ -109,8 +137,117 @@ function handleProductDetection(productData) {
   // Store in chrome storage
   chrome.storage.local.set({ currentProduct: currentProduct });
   
+  // Check if user is logged in and generate coupons
+  chrome.storage.local.get(['isLoggedIn', 'user'], async (result) => {
+    if (result.isLoggedIn && result.user) {
+      // Generate coupons for logged-in users
+      await generateUserCoupons(currentProduct, result.user);
+    }
+  });
+  
   // Fetch price comparisons
   fetchPriceComparisons(currentProduct);
+}
+
+// Generate coupons for logged-in users
+async function generateUserCoupons(product, user) {
+  try {
+    // Check if user already has coupons for this site
+    const data = await chrome.storage.local.get(['userCoupons']);
+    const existingCoupons = data.userCoupons || [];
+    
+    const activeSiteCoupons = existingCoupons.filter(coupon => 
+      coupon.site.toLowerCase() === product.site.toLowerCase() &&
+      !coupon.used &&
+      new Date(coupon.expiresAt) > new Date()
+    );
+    
+    // Only generate new coupons if user has less than 2 active coupons for this site
+    if (activeSiteCoupons.length < 2) {
+      const newCoupons = await generateSiteCoupons(product.site, detectCategory(product.title), user);
+      
+      if (newCoupons.length > 0) {
+        // Add to existing coupons
+        const allCoupons = [...existingCoupons, ...newCoupons];
+        
+        // Update user coupon count
+        user.couponsEarned = (user.couponsEarned || 0) + newCoupons.length;
+        
+        // Save updated data
+        await chrome.storage.local.set({
+          user: user,
+          userCoupons: allCoupons,
+          pendingCoupons: newCoupons
+        });
+        
+        // Track coupon generation
+        analytics.track('Coupons Generated', {
+          user_id: user.id,
+          coupon_count: newCoupons.length,
+          site: product.site,
+          category: detectCategory(product.title)
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error generating coupons:', error);
+  }
+}
+
+// Generate site-specific coupons
+async function generateSiteCoupons(site, category, user) {
+  const coupons = [];
+  const expirationDate = new Date();
+  expirationDate.setDate(expirationDate.getDate() + 14); // 14 days from now
+
+  // Site-specific coupon templates
+  const couponTemplates = {
+    'Nike': [
+      { code: 'NIKE10', discount: '10% off', minPurchase: 100 },
+      { code: 'FREERUN', discount: 'Free shipping', minPurchase: 50 },
+      { code: 'ATHLETE15', discount: '15% off athletic wear', minPurchase: 150 }
+    ],
+    'Amazon': [
+      { code: 'PRIME5', discount: '5% off', minPurchase: 25 },
+      { code: 'BULK10', discount: '10% off orders over $50', minPurchase: 50 },
+      { code: 'NEWUSER', discount: '15% off first order', minPurchase: 30 }
+    ],
+    'Target': [
+      { code: 'TARGET10', discount: '10% off', minPurchase: 50 },
+      { code: 'REDCARD', discount: '5% additional discount', minPurchase: 0 },
+      { code: 'CIRCLE15', discount: '15% off select items', minPurchase: 100 }
+    ],
+    'Walmart': [
+      { code: 'SAVE5', discount: '5% off', minPurchase: 35 },
+      { code: 'PICKUP10', discount: '10% off pickup orders', minPurchase: 50 },
+      { code: 'GROCERY', discount: '$10 off groceries', minPurchase: 100 }
+    ]
+  };
+
+  // Generic coupons for other sites
+  const genericCoupons = [
+    { code: 'SAVE10', discount: '10% off', minPurchase: 50 },
+    { code: 'WELCOME15', discount: '15% off first order', minPurchase: 75 },
+    { code: 'FREESHIP', discount: 'Free shipping', minPurchase: 25 }
+  ];
+
+  const templates = couponTemplates[site] || genericCoupons;
+  const selectedTemplate = templates[Math.floor(Math.random() * templates.length)];
+
+  coupons.push({
+    id: generateCouponId(),
+    code: selectedTemplate.code,
+    discount: selectedTemplate.discount,
+    site: site,
+    category: category,
+    minPurchase: selectedTemplate.minPurchase,
+    expiresAt: expirationDate.toISOString(),
+    createdAt: new Date().toISOString(),
+    used: false,
+    userId: user.id
+  });
+
+  return coupons;
 }
 
 // Generate hash for product identification
@@ -120,6 +257,11 @@ function generateProductHash(product) {
   // Create hash from URL path + title + price
   const urlPath = new URL(product.url).pathname;
   return btoa(urlPath + product.title + product.price).substring(0, 16);
+}
+
+// Generate coupon ID
+function generateCouponId() {
+  return 'coupon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
 // Fetch price comparisons
@@ -275,9 +417,6 @@ async function generateRealComparisons(product) {
     };
   }).sort((a, b) => a.price - b.price);
 }
-
-// Rest of the functions remain the same...
-// [Including all the helper functions from your original background.js]
 
 // Clean product title for better search results
 function cleanProductTitle(title) {
@@ -482,5 +621,35 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     }
   } catch (error) {
     // Tab might have been closed
+  }
+});
+
+// Handle notification clicks
+chrome.notifications.onClicked.addListener((notificationId) => {
+  // Open popup when notification is clicked
+  chrome.action.openPopup();
+  
+  analytics.track('Notification Clicked', {
+    notificationId: notificationId
+  });
+});
+
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+  if (buttonIndex === 0) {
+    // View Coupons button clicked
+    chrome.action.openPopup();
+    
+    analytics.track('Notification Button Clicked', {
+      notificationId: notificationId,
+      button: 'view_coupons'
+    });
+  } else if (buttonIndex === 1) {
+    // Dismiss button clicked
+    chrome.notifications.clear(notificationId);
+    
+    analytics.track('Notification Button Clicked', {
+      notificationId: notificationId,
+      button: 'dismiss'
+    });
   }
 });

@@ -11,6 +11,9 @@ script.onload = function() {
     timestamp: new Date().toISOString()
   });
   
+  // Setup auth listeners
+  setupAuthListeners();
+  
   // Notify content script that popup was opened
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     if (tabs[0]) {
@@ -36,12 +39,14 @@ if (document.readyState === 'loading') {
     if (typeof analytics === 'undefined') {
       // If analytics hasn't loaded yet, initialize without it
       loadProductData();
+      setupAuthListeners();
     }
   });
 } else {
   // DOM already loaded
   if (typeof analytics === 'undefined') {
     loadProductData();
+    setupAuthListeners();
   }
 }
 
@@ -49,11 +54,20 @@ async function loadProductData() {
   const startTime = Date.now();
   
   try {
-    // Get stored product data
-    const data = await chrome.storage.local.get(['currentProduct', 'comparisons']);
+    // Get stored product data and user info
+    const data = await chrome.storage.local.get([
+      'currentProduct', 
+      'comparisons', 
+      'isLoggedIn', 
+      'user',
+      'pendingCoupons'
+    ]);
+    
+    // Update user account section
+    updateUserAccount(data.isLoggedIn, data.user);
     
     if (data.currentProduct) {
-      displayProduct(data.currentProduct);
+      displayProduct(data.currentProduct, data.isLoggedIn, data.pendingCoupons);
       
       // Track popup view with product
       if (typeof analytics !== 'undefined') {
@@ -62,7 +76,8 @@ async function loadProductData() {
           product_price: data.currentProduct.price,
           currency: data.currentProduct.currency,
           site: data.currentProduct.site,
-          load_time_ms: Date.now() - startTime
+          load_time_ms: Date.now() - startTime,
+          user_logged_in: data.isLoggedIn || false
         });
       }
       
@@ -77,12 +92,13 @@ async function loadProductData() {
         }, 2000);
       }
     } else {
-      showNoProduct();
+      showNoProduct(data.isLoggedIn);
       
       // Track popup view without product
       if (typeof analytics !== 'undefined') {
         analytics.track('Popup Viewed Without Product', {
-          load_time_ms: Date.now() - startTime
+          load_time_ms: Date.now() - startTime,
+          user_logged_in: data.isLoggedIn || false
         });
       }
     }
@@ -100,7 +116,26 @@ async function loadProductData() {
   }
 }
 
-function displayProduct(product) {
+function updateUserAccount(isLoggedIn, user) {
+  const userAccountEl = document.getElementById('userAccount');
+  
+  if (isLoggedIn && user) {
+    // Show user account section
+    userAccountEl.classList.remove('hidden');
+    
+    // Update user info
+    document.getElementById('userName').textContent = user.firstName;
+    document.getElementById('userSavings').textContent = 
+      `$${(user.totalSavings || 0).toLocaleString()} saved`;
+    document.getElementById('userCoupons').textContent = 
+      `${user.couponsEarned || 0} coupons`;
+  } else {
+    // Hide user account section
+    userAccountEl.classList.add('hidden');
+  }
+}
+
+function displayProduct(product, isLoggedIn, pendingCoupons) {
   // Hide no product message
   document.getElementById('noProduct').classList.add('hidden');
   
@@ -121,6 +156,25 @@ function displayProduct(product) {
   const currencySymbol = product.currencySymbol || '$';
   document.getElementById('currentPrice').textContent = `${currencySymbol}${product.price.toLocaleString()}`;
   document.getElementById('siteName').textContent = product.site;
+  
+  // Handle authentication prompt and coupon notification
+  const authPrompt = document.getElementById('authPrompt');
+  const couponNotification = document.getElementById('couponNotification');
+  
+  if (isLoggedIn) {
+    // User is logged in - hide auth prompt and potentially show coupon notification
+    authPrompt.classList.add('hidden');
+    
+    if (pendingCoupons && pendingCoupons.length > 0) {
+      couponNotification.classList.remove('hidden');
+    } else {
+      couponNotification.classList.add('hidden');
+    }
+  } else {
+    // User not logged in - show auth prompt
+    authPrompt.classList.remove('hidden');
+    couponNotification.classList.add('hidden');
+  }
   
   showStatus(`Comparing prices for ${product.site}`);
 }
@@ -218,15 +272,150 @@ function createComparisonItem(comparison, currencySymbol = '$') {
   return div;
 }
 
-function showNoProduct() {
+function showNoProduct(isLoggedIn) {
   document.getElementById('productInfo').classList.add('hidden');
   document.getElementById('comparisons').classList.add('hidden');
+  document.getElementById('authPrompt').classList.add('hidden');
   document.getElementById('noProduct').classList.remove('hidden');
+  
+  // Show/hide auth CTA based on login status
+  const authCTA = document.querySelector('.auth-cta');
+  if (authCTA) {
+    if (isLoggedIn) {
+      authCTA.style.display = 'none';
+    } else {
+      authCTA.style.display = 'block';
+    }
+  }
+  
   showStatus('No product detected');
 }
 
 function showStatus(message) {
   document.getElementById('status').textContent = message;
+}
+
+// Add authentication event listeners
+function setupAuthListeners() {
+  // Auth buttons
+  const openAuthBtn = document.getElementById('openAuthBtn');
+  const noProductAuthBtn = document.getElementById('noProductAuthBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  
+  if (openAuthBtn) {
+    openAuthBtn.addEventListener('click', openAuthWindow);
+  }
+  
+  if (noProductAuthBtn) {
+    noProductAuthBtn.addEventListener('click', openAuthWindow);
+  }
+  
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', handleLogout);
+  }
+}
+
+function openAuthWindow() {
+  // Track auth button click
+  if (typeof analytics !== 'undefined') {
+    analytics.track('Auth Button Clicked', {
+      source: 'popup',
+      button_location: event.target.id
+    });
+  }
+  
+  // Send message to background script to open auth window
+  chrome.runtime.sendMessage({
+    action: 'openAuth'
+  });
+}
+
+async function handleLogout() {
+  // Confirm logout
+  if (!confirm('Are you sure you want to sign out?')) {
+    return;
+  }
+  
+  try {
+    // Clear user data
+    await chrome.storage.local.remove(['user', 'isLoggedIn', 'pendingCoupons']);
+    
+    // Track logout
+    if (typeof analytics !== 'undefined') {
+      analytics.track('User Logged Out', {
+        source: 'popup'
+      });
+    }
+    
+    // Reload popup data
+    loadProductData();
+    
+    showSuccess('Signed out successfully');
+  } catch (error) {
+    console.error('Logout error:', error);
+    showError('Failed to sign out. Please try again.');
+  }
+}
+
+// Add showError and showSuccess functions
+function showError(message) {
+  // Create or update error message element
+  let errorEl = document.querySelector('.temp-error-message');
+  if (!errorEl) {
+    errorEl = document.createElement('div');
+    errorEl.className = 'temp-error-message';
+    errorEl.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--error);
+      color: white;
+      padding: 8px 15px;
+      border-radius: 4px;
+      font-size: 13px;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+    document.body.appendChild(errorEl);
+  }
+  
+  errorEl.textContent = message;
+  errorEl.style.display = 'block';
+  
+  setTimeout(() => {
+    errorEl.style.display = 'none';
+  }, 4000);
+}
+
+function showSuccess(message) {
+  // Create or update success message element
+  let successEl = document.querySelector('.temp-success-message');
+  if (!successEl) {
+    successEl = document.createElement('div');
+    successEl.className = 'temp-success-message';
+    successEl.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--success);
+      color: white;
+      padding: 8px 15px;
+      border-radius: 4px;
+      font-size: 13px;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+    document.body.appendChild(successEl);
+  }
+  
+  successEl.textContent = message;
+  successEl.style.display = 'block';
+  
+  setTimeout(() => {
+    successEl.style.display = 'none';
+  }, 3000);
 }
 
 // Track popup interactions
@@ -260,6 +449,11 @@ window.addEventListener('beforeunload', function() {
 // Listen for storage changes (real-time updates)
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local') {
+    // Reload popup data if user login status changes
+    if (changes.isLoggedIn || changes.user) {
+      loadProductData();
+    }
+    
     // Update comparisons if they change
     if (changes.comparisons) {
       chrome.storage.local.get(['currentProduct'], (data) => {
@@ -280,7 +474,9 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     
     // Update product info if it changes
     if (changes.currentProduct) {
-      displayProduct(changes.currentProduct.newValue);
+      chrome.storage.local.get(['isLoggedIn', 'pendingCoupons'], (data) => {
+        displayProduct(changes.currentProduct.newValue, data.isLoggedIn, data.pendingCoupons);
+      });
     }
   }
 });

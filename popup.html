@@ -15,6 +15,17 @@
     </header>
     
     <div id="content">
+      <!-- Authentication Prompt (shown when not logged in and has product) -->
+      <div id="authPrompt" class="auth-prompt hidden">
+        <div class="auth-icon">🎟️</div>
+        <h3>Get Exclusive Coupons!</h3>
+        <p>Sign up to unlock special discount codes and price alerts for this product.</p>
+        <button class="btn-auth" id="openAuthBtn">
+          Get Free Coupons
+        </button>
+        <p class="auth-note">Takes less than 30 seconds • No spam, we promise</p>
+      </div>
+      
       <!-- Product Info Section -->
       <div id="productInfo" class="product-info hidden">
         <img id="productImage" src="" alt="Product">
@@ -26,6 +37,11 @@
           <div class="site-name">
             on <span id="siteName"></span>
           </div>
+          <!-- Coupon notification for logged in users -->
+          <div id="couponNotification" class="coupon-notification hidden">
+            <span class="coupon-icon">🎟️</span>
+            <span class="coupon-text">Check your email for exclusive coupons!</span>
+          </div>
         </div>
       </div>
       
@@ -33,6 +49,23 @@
       <div id="comparisons" class="comparisons hidden">
         <h3>🔍 Price Comparison</h3>
         <div id="comparisonList"></div>
+      </div>
+      
+      <!-- User Account Section (for logged in users) -->
+      <div id="userAccount" class="user-account hidden">
+        <div class="user-info">
+          <div class="user-avatar">👤</div>
+          <div class="user-details">
+            <div class="user-name" id="userName">User Name</div>
+            <div class="user-stats">
+              <span id="userSavings">$0 saved</span> • 
+              <span id="userCoupons">0 coupons</span>
+            </div>
+          </div>
+          <button class="btn-logout" id="logoutBtn" title="Sign Out">
+            <span>⏻</span>
+          </button>
+        </div>
       </div>
       
       <!-- No Product Message -->
@@ -44,6 +77,13 @@
           <p>Popular sites include:</p>
           <p>Amazon • eBay • Walmart • Target • Best Buy</p>
           <p>Etsy • AliExpress • Shopify stores • And more!</p>
+        </div>
+        
+        <!-- Auth CTA in no product state -->
+        <div class="auth-cta">
+          <button class="btn-auth-secondary" id="noProductAuthBtn">
+            Sign Up for Exclusive Coupons
+          </button>
         </div>
       </div>
     </div>
