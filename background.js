@@ -1,12 +1,25 @@
 // background.js - Fixed Owl Price Checker Background Script
 
-// Import analytics with error handling
+// Initialize analytics variable
 let analytics = null;
+
+// Import analytics with proper error handling
 try {
+  // Import the analytics script
   importScripts('analytics.js');
-  analytics = window.analytics || null;
+  // Get the analytics instance from the global scope after import
+  analytics = (typeof window !== 'undefined' && window.analytics) || 
+             (typeof self !== 'undefined' && self.analytics) || 
+             null;
+  
+  if (analytics) {
+    console.log('🦉 Analytics loaded successfully in background');
+  } else {
+    console.warn('🦉 Analytics imported but instance not found');
+  }
 } catch (error) {
   console.error('🦉 Failed to load analytics:', error);
+  analytics = null;
 }
 
 // Store current product info
@@ -26,7 +39,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       });
       
       // Track installation if analytics available
-      if (analytics) {
+      if (analytics && typeof analytics.track === 'function') {
         analytics.track('Extension Installed', {
           version: chrome.runtime.getManifest().version,
           browser: 'Chrome',
@@ -34,14 +47,16 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         });
         
         // Initial identify
-        analytics.identify(null, {
-          created_at: new Date().toISOString(),
-          extension_version: chrome.runtime.getManifest().version
-        });
+        if (typeof analytics.identify === 'function') {
+          analytics.identify(null, {
+            created_at: new Date().toISOString(),
+            extension_version: chrome.runtime.getManifest().version
+          });
+        }
       }
       
     } else if (details.reason === 'update') {
-      if (analytics) {
+      if (analytics && typeof analytics.track === 'function') {
         analytics.track('Extension Updated', {
           previous_version: details.previousVersion,
           current_version: chrome.runtime.getManifest().version
@@ -84,15 +99,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     
     // Handle analytics events from content script
-    if (request.action === 'trackEvent' && analytics) {
+    if (request.action === 'trackEvent' && analytics && typeof analytics.track === 'function') {
       analytics.track(request.event, request.properties || {});
     }
     
-    if (request.action === 'trackError' && analytics) {
+    if (request.action === 'trackError' && analytics && typeof analytics.track === 'function') {
       analytics.track('Extension Error', request.data || {});
     }
     
-    if (request.action === 'trackPage' && analytics) {
+    if (request.action === 'trackPage' && analytics && typeof analytics.page === 'function') {
       analytics.page(request.category, request.name, request.properties || {});
     }
   } catch (error) {
@@ -111,7 +126,7 @@ function openAuthWindow() {
       focused: true
     }, (window) => {
       // Track auth window opened if analytics available
-      if (analytics && window) {
+      if (analytics && typeof analytics.track === 'function' && window) {
         analytics.track('Auth Window Opened', {
           windowId: window.id,
           timestamp: new Date().toISOString()
@@ -159,7 +174,7 @@ async function handleUserSignIn() {
       const stats = await getUserStatsForIdentify(user.id);
       
       // Enhanced user identification on sign in (if analytics available)
-      if (analytics) {
+      if (analytics && typeof analytics.identify === 'function') {
         analytics.identify(user.id, {
           firstName: user.firstName,
           email: user.email,
@@ -176,12 +191,14 @@ async function handleUserSignIn() {
         });
         
         // Track session start
-        analytics.track('Session Started', {
-          user_id: user.id,
-          session_type: 'authenticated',
-          login_method: 'extension',
-          timestamp: new Date().toISOString()
-        });
+        if (typeof analytics.track === 'function') {
+          analytics.track('Session Started', {
+            user_id: user.id,
+            session_type: 'authenticated',
+            login_method: 'extension',
+            timestamp: new Date().toISOString()
+          });
+        }
       }
       
       console.log('User signed in successfully:', user.firstName);
@@ -244,7 +261,7 @@ async function handleUserSignOut() {
     // Track session analytics before complete logout
     const sessionData = await chrome.storage.local.get(['sessionStartTime']);
     
-    if (sessionData.sessionStartTime && analytics) {
+    if (sessionData.sessionStartTime && analytics && typeof analytics.track === 'function') {
       const sessionDuration = calculateSessionDuration(sessionData.sessionStartTime);
       
       analytics.track('Authentication Session Ended', {
@@ -333,7 +350,7 @@ function handleProductDetection(productData) {
     currentProduct = productData;
     
     // Track product view with e-commerce properties (if analytics available)
-    if (analytics) {
+    if (analytics && typeof analytics.track === 'function') {
       analytics.track('Product Viewed', {
         product_id: extractProductId(currentProduct.url),
         product_name: currentProduct.title,
@@ -403,7 +420,7 @@ async function generateUserCoupons(product, user) {
         });
         
         // Track coupon generation (if analytics available)
-        if (analytics) {
+        if (analytics && typeof analytics.track === 'function') {
           analytics.track('Coupons Generated', {
             user_id: user.id,
             coupon_count: newCoupons.length,
@@ -504,7 +521,7 @@ async function fetchPriceComparisons(product) {
     const startTime = Date.now();
     
     // Track comparison request (if analytics available)
-    if (analytics) {
+    if (analytics && typeof analytics.track === 'function') {
       analytics.track('Price Comparison Started', {
         product_id: extractProductId(product.url),
         product_name: product.title,
@@ -530,7 +547,7 @@ async function fetchPriceComparisons(product) {
     const potentialSavings = product.price - lowestPrice;
     
     // Track comparison completion (if analytics available)
-    if (analytics) {
+    if (analytics && typeof analytics.track === 'function') {
       analytics.track('Price Comparison Completed', {
         product_id: extractProductId(product.url),
         product_name: product.title,
@@ -748,7 +765,7 @@ async function updateUserStats(savings) {
     await chrome.storage.local.set(newStats);
     
     // Update user traits (if analytics available)
-    if (analytics) {
+    if (analytics && typeof analytics.identify === 'function') {
       analytics.identify(null, newStats);
     }
   } catch (error) {
@@ -839,7 +856,7 @@ function detectBrand(title) {
 // Track browser action clicks
 chrome.action.onClicked.addListener((tab) => {
   try {
-    if (analytics) {
+    if (analytics && typeof analytics.track === 'function') {
       analytics.track('Extension Icon Clicked', {
         hadProduct: !!currentProduct,
         currentUrl: tab.url
@@ -856,7 +873,7 @@ chrome.notifications.onClicked.addListener((notificationId) => {
     // Open popup when notification is clicked
     chrome.action.openPopup();
     
-    if (analytics) {
+    if (analytics && typeof analytics.track === 'function') {
       analytics.track('Notification Clicked', {
         notificationId: notificationId
       });
@@ -872,7 +889,7 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
       // View Coupons button clicked
       chrome.action.openPopup();
       
-      if (analytics) {
+      if (analytics && typeof analytics.track === 'function') {
         analytics.track('Notification Button Clicked', {
           notificationId: notificationId,
           button: 'view_coupons'
@@ -882,7 +899,7 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
       // Dismiss button clicked
       chrome.notifications.clear(notificationId);
       
-      if (analytics) {
+      if (analytics && typeof analytics.track === 'function') {
         analytics.track('Notification Button Clicked', {
           notificationId: notificationId,
           button: 'dismiss'
