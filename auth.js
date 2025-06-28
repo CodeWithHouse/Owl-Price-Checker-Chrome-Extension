@@ -29,11 +29,26 @@ class AuthManager {
 
   async loadAnalytics() {
     return new Promise((resolve) => {
+      // Check if analytics is already loaded
+      if (typeof analytics !== 'undefined') {
+        resolve();
+        return;
+      }
+      
       const script = document.createElement('script');
       script.src = 'analytics.js';
-      script.onload = resolve;
-      script.onerror = resolve; // Continue even if analytics fails
+      script.onload = () => {
+        console.log('Analytics loaded successfully');
+        resolve();
+      };
+      script.onerror = (error) => {
+        console.error('Failed to load analytics:', error);
+        resolve(); // Continue even if analytics fails
+      };
       document.head.appendChild(script);
+      
+      // Timeout fallback
+      setTimeout(resolve, 2000);
     });
   }
 
@@ -181,17 +196,26 @@ class AuthManager {
   }
 
   async handleSignup() {
+    console.log('🦉 Starting signup process...');
+    
     const form = document.getElementById('signupFormElement');
     const formData = new FormData(form);
     
-    const firstName = formData.get('firstName').trim();
-    const email = formData.get('email').trim();
-    const agreeTerms = document.getElementById('agreeTerms').checked;
-    const marketingEmails = document.getElementById('marketingEmails').checked;
+    const firstName = formData.get('firstName')?.trim() || '';
+    const email = formData.get('email')?.trim() || '';
+    const agreeTerms = document.getElementById('agreeTerms')?.checked || false;
+    const marketingEmails = document.getElementById('marketingEmails')?.checked || false;
 
-    // Validation
-    if (!this.validateName(document.getElementById('firstName')) || 
-        !this.validateEmail(document.getElementById('email'))) {
+    console.log('🦉 Form data:', { firstName, email, agreeTerms, marketingEmails });
+
+    // Enhanced validation
+    if (!firstName || firstName.length < 2) {
+      this.showError('Please enter a valid first name (at least 2 characters)');
+      return;
+    }
+
+    if (!email || !this.isValidEmail(email)) {
+      this.showError('Please enter a valid email address');
       return;
     }
 
@@ -200,22 +224,30 @@ class AuthManager {
       return;
     }
 
-    // Check if email already exists
-    const existingUsers = await chrome.storage.local.get(['registeredUsers']);
-    const users = existingUsers.registeredUsers || [];
-    
-    if (users.find(user => user.email.toLowerCase() === email.toLowerCase())) {
-      this.showError('An account with this email already exists. Please sign in instead.');
-      document.getElementById('showLoginForm').click();
-      setTimeout(() => {
-        document.getElementById('loginEmail').value = email;
-      }, 300);
-      return;
-    }
-
     this.setLoading(true, 'signupBtn');
 
     try {
+      console.log('🦉 Checking for existing users...');
+      
+      // Check if email already exists
+      const existingUsers = await chrome.storage.local.get(['registeredUsers']);
+      const users = existingUsers.registeredUsers || [];
+      
+      const existingUser = users.find(user => 
+        user.email.toLowerCase() === email.toLowerCase()
+      );
+      
+      if (existingUser) {
+        this.showError('An account with this email already exists. Please sign in instead.');
+        setTimeout(() => {
+          document.getElementById('showLoginForm').click();
+          document.getElementById('loginEmail').value = email;
+        }, 2000);
+        return;
+      }
+
+      console.log('🦉 Creating new user...');
+
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -230,6 +262,8 @@ class AuthManager {
         totalSavings: 0
       };
 
+      console.log('🦉 New user created:', user);
+
       // Save user data
       users.push(user);
       await chrome.storage.local.set({
@@ -238,8 +272,12 @@ class AuthManager {
         registeredUsers: users
       });
 
+      console.log('🦉 User data saved to storage');
+
       // Track successful signup
       if (typeof analytics !== 'undefined') {
+        console.log('🦉 Tracking signup...');
+        
         analytics.identify(user.id, {
           firstName: user.firstName,
           email: user.email,
@@ -270,6 +308,8 @@ class AuthManager {
           session_id: this.generateSessionId(),
           timestamp: new Date().toISOString()
         });
+      } else {
+        console.warn('🦉 Analytics not available for tracking');
       }
 
       // Send welcome email (simulated)
@@ -280,7 +320,7 @@ class AuthManager {
       this.showSuccess(`Welcome ${firstName}! Check your email for exclusive coupons.`);
 
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('🦉 Signup error:', error);
       this.showError('Failed to create account. Please try again.');
       
       // Track signup error
@@ -295,16 +335,29 @@ class AuthManager {
     }
   }
 
+  // Add email validation helper
+  isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
   async handleLogin() {
+    console.log('🦉 Starting login process...');
+    
     const email = document.getElementById('loginEmail').value.trim();
 
-    if (!this.validateEmail(document.getElementById('loginEmail'))) {
+    console.log('🦉 Login attempt for email:', email);
+
+    if (!email || !this.isValidEmail(email)) {
+      this.showError('Please enter a valid email address');
       return;
     }
 
     this.setLoading(true, 'loginBtn');
 
     try {
+      console.log('🦉 Checking for existing user...');
+      
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -322,6 +375,8 @@ class AuthManager {
         return;
       }
 
+      console.log('🦉 User found, logging in:', user.firstName);
+
       // Update last login
       user.lastLogin = new Date().toISOString();
       const userIndex = users.findIndex(u => u.id === user.id);
@@ -334,8 +389,12 @@ class AuthManager {
         registeredUsers: users
       });
 
-      // Track successful login with enhanced identify
+      console.log('🦉 Login successful, user data updated');
+
+      // Track successful login
       if (typeof analytics !== 'undefined') {
+        console.log('🦉 Tracking login...');
+        
         // Get additional data for enhanced identification
         const totalLogins = await this.incrementLoginCount(user.id);
         const loginStreak = await this.calculateLoginStreak(user.id);
@@ -366,6 +425,8 @@ class AuthManager {
           session_id: this.generateSessionId(),
           timestamp: user.lastLogin
         });
+      } else {
+        console.warn('🦉 Analytics not available for tracking');
       }
 
       // Show success state
@@ -373,7 +434,7 @@ class AuthManager {
       this.showSuccess(`Welcome back, ${user.firstName}!`);
 
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('🦉 Login error:', error);
       this.showError('Failed to sign in. Please try again.');
       
       // Track login error
