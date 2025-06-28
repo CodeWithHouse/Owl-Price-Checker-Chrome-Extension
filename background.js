@@ -1,30 +1,42 @@
-// background.js - Fixed Owl Price Checker Background Script
+// background.js - Fixed Owl Price Checker Background Script (Final)
 
-// Initialize analytics variable
-let analytics = null;
+// Store current product info
+let currentProduct = null;
+let lastProductHash = null;
+
+// Analytics will be available globally after import
+let analyticsAvailable = false;
 
 // Import analytics with proper error handling
 try {
   // Import the analytics script
   importScripts('analytics.js');
-  // Get the analytics instance from the global scope after import
-  analytics = (typeof window !== 'undefined' && window.analytics) || 
-             (typeof self !== 'undefined' && self.analytics) || 
-             null;
   
-  if (analytics) {
+  // Check if analytics is available in global scope
+  if (typeof analytics !== 'undefined' && analytics) {
+    analyticsAvailable = true;
     console.log('🦉 Analytics loaded successfully in background');
   } else {
     console.warn('🦉 Analytics imported but instance not found');
+    analyticsAvailable = false;
   }
 } catch (error) {
   console.error('🦉 Failed to load analytics:', error);
-  analytics = null;
+  analyticsAvailable = false;
 }
 
-// Store current product info
-let currentProduct = null;
-let lastProductHash = null;
+// Helper function to safely call analytics
+function safeAnalyticsCall(method, ...args) {
+  try {
+    if (analyticsAvailable && typeof analytics !== 'undefined' && analytics && typeof analytics[method] === 'function') {
+      return analytics[method](...args);
+    }
+    return false;
+  } catch (error) {
+    console.error(`🦉 Error calling analytics.${method}:`, error);
+    return false;
+  }
+}
 
 // Track extension installation
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -39,29 +51,23 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       });
       
       // Track installation if analytics available
-      if (analytics && typeof analytics.track === 'function') {
-        analytics.track('Extension Installed', {
-          version: chrome.runtime.getManifest().version,
-          browser: 'Chrome',
-          timestamp: new Date().toISOString()
-        });
-        
-        // Initial identify
-        if (typeof analytics.identify === 'function') {
-          analytics.identify(null, {
-            created_at: new Date().toISOString(),
-            extension_version: chrome.runtime.getManifest().version
-          });
-        }
-      }
+      safeAnalyticsCall('track', 'Extension Installed', {
+        version: chrome.runtime.getManifest().version,
+        browser: 'Chrome',
+        timestamp: new Date().toISOString()
+      });
+      
+      // Initial identify
+      safeAnalyticsCall('identify', null, {
+        created_at: new Date().toISOString(),
+        extension_version: chrome.runtime.getManifest().version
+      });
       
     } else if (details.reason === 'update') {
-      if (analytics && typeof analytics.track === 'function') {
-        analytics.track('Extension Updated', {
-          previous_version: details.previousVersion,
-          current_version: chrome.runtime.getManifest().version
-        });
-      }
+      safeAnalyticsCall('track', 'Extension Updated', {
+        previous_version: details.previousVersion,
+        current_version: chrome.runtime.getManifest().version
+      });
     }
   } catch (error) {
     console.error('🦉 Error in onInstalled handler:', error);
@@ -99,16 +105,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     
     // Handle analytics events from content script
-    if (request.action === 'trackEvent' && analytics && typeof analytics.track === 'function') {
-      analytics.track(request.event, request.properties || {});
+    if (request.action === 'trackEvent') {
+      safeAnalyticsCall('track', request.event, request.properties || {});
     }
     
-    if (request.action === 'trackError' && analytics && typeof analytics.track === 'function') {
-      analytics.track('Extension Error', request.data || {});
+    if (request.action === 'trackError') {
+      safeAnalyticsCall('track', 'Extension Error', request.data || {});
     }
     
-    if (request.action === 'trackPage' && analytics && typeof analytics.page === 'function') {
-      analytics.page(request.category, request.name, request.properties || {});
+    if (request.action === 'trackPage') {
+      safeAnalyticsCall('page', request.category, request.name, request.properties || {});
     }
   } catch (error) {
     console.error('🦉 Error handling message:', error);
@@ -126,8 +132,8 @@ function openAuthWindow() {
       focused: true
     }, (window) => {
       // Track auth window opened if analytics available
-      if (analytics && typeof analytics.track === 'function' && window) {
-        analytics.track('Auth Window Opened', {
+      if (window) {
+        safeAnalyticsCall('track', 'Auth Window Opened', {
           windowId: window.id,
           timestamp: new Date().toISOString()
         });
@@ -174,32 +180,28 @@ async function handleUserSignIn() {
       const stats = await getUserStatsForIdentify(user.id);
       
       // Enhanced user identification on sign in (if analytics available)
-      if (analytics && typeof analytics.identify === 'function') {
-        analytics.identify(user.id, {
-          firstName: user.firstName,
-          email: user.email,
-          signup_date: user.createdAt,
-          last_active: new Date().toISOString(),
-          total_sessions: await incrementUserSessions(user.id),
-          total_savings: user.totalSavings || 0,
-          total_coupons: user.couponsEarned || 0,
-          marketing_emails: user.marketingEmails,
-          account_status: 'active',
-          user_type: 'returning',
-          extension_version: chrome.runtime.getManifest().version,
-          ...stats // Additional computed stats
-        });
-        
-        // Track session start
-        if (typeof analytics.track === 'function') {
-          analytics.track('Session Started', {
-            user_id: user.id,
-            session_type: 'authenticated',
-            login_method: 'extension',
-            timestamp: new Date().toISOString()
-          });
-        }
-      }
+      safeAnalyticsCall('identify', user.id, {
+        firstName: user.firstName,
+        email: user.email,
+        signup_date: user.createdAt,
+        last_active: new Date().toISOString(),
+        total_sessions: await incrementUserSessions(user.id),
+        total_savings: user.totalSavings || 0,
+        total_coupons: user.couponsEarned || 0,
+        marketing_emails: user.marketingEmails,
+        account_status: 'active',
+        user_type: 'returning',
+        extension_version: chrome.runtime.getManifest().version,
+        ...stats // Additional computed stats
+      });
+      
+      // Track session start
+      safeAnalyticsCall('track', 'Session Started', {
+        user_id: user.id,
+        session_type: 'authenticated',
+        login_method: 'extension',
+        timestamp: new Date().toISOString()
+      });
       
       console.log('User signed in successfully:', user.firstName);
     }
@@ -261,10 +263,10 @@ async function handleUserSignOut() {
     // Track session analytics before complete logout
     const sessionData = await chrome.storage.local.get(['sessionStartTime']);
     
-    if (sessionData.sessionStartTime && analytics && typeof analytics.track === 'function') {
+    if (sessionData.sessionStartTime) {
       const sessionDuration = calculateSessionDuration(sessionData.sessionStartTime);
       
-      analytics.track('Authentication Session Ended', {
+      safeAnalyticsCall('track', 'Authentication Session Ended', {
         session_duration_minutes: sessionDuration,
         session_end_reason: 'user_logout',
         timestamp: new Date().toISOString()
@@ -350,18 +352,16 @@ function handleProductDetection(productData) {
     currentProduct = productData;
     
     // Track product view with e-commerce properties (if analytics available)
-    if (analytics && typeof analytics.track === 'function') {
-      analytics.track('Product Viewed', {
-        product_id: extractProductId(currentProduct.url),
-        product_name: currentProduct.title,
-        price: currentProduct.price,
-        currency: currentProduct.currency || 'USD',
-        category: detectCategory(currentProduct.title),
-        brand: detectBrand(currentProduct.title),
-        site: currentProduct.site,
-        url: currentProduct.url
-      });
-    }
+    safeAnalyticsCall('track', 'Product Viewed', {
+      product_id: extractProductId(currentProduct.url),
+      product_name: currentProduct.title,
+      price: currentProduct.price,
+      currency: currentProduct.currency || 'USD',
+      category: detectCategory(currentProduct.title),
+      brand: detectBrand(currentProduct.title),
+      site: currentProduct.site,
+      url: currentProduct.url
+    });
     
     // Store in chrome storage
     chrome.storage.local.set({ currentProduct: currentProduct });
@@ -420,14 +420,12 @@ async function generateUserCoupons(product, user) {
         });
         
         // Track coupon generation (if analytics available)
-        if (analytics && typeof analytics.track === 'function') {
-          analytics.track('Coupons Generated', {
-            user_id: user.id,
-            coupon_count: newCoupons.length,
-            site: product.site,
-            category: detectCategory(product.title)
-          });
-        }
+        safeAnalyticsCall('track', 'Coupons Generated', {
+          user_id: user.id,
+          coupon_count: newCoupons.length,
+          site: product.site,
+          category: detectCategory(product.title)
+        });
       }
     }
   } catch (error) {
@@ -521,15 +519,13 @@ async function fetchPriceComparisons(product) {
     const startTime = Date.now();
     
     // Track comparison request (if analytics available)
-    if (analytics && typeof analytics.track === 'function') {
-      analytics.track('Price Comparison Started', {
-        product_id: extractProductId(product.url),
-        product_name: product.title,
-        current_price: product.price,
-        currency: product.currency || 'USD',
-        current_site: product.site
-      });
-    }
+    safeAnalyticsCall('track', 'Price Comparison Started', {
+      product_id: extractProductId(product.url),
+      product_name: product.title,
+      current_price: product.price,
+      currency: product.currency || 'USD',
+      current_site: product.site
+    });
     
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -547,22 +543,20 @@ async function fetchPriceComparisons(product) {
     const potentialSavings = product.price - lowestPrice;
     
     // Track comparison completion (if analytics available)
-    if (analytics && typeof analytics.track === 'function') {
-      analytics.track('Price Comparison Completed', {
-        product_id: extractProductId(product.url),
-        product_name: product.title,
-        current_price: product.price,
-        currency: product.currency || 'USD',
-        lowest_price: lowestPrice,
-        highest_price: highestPrice,
-        average_price: Math.round(averagePrice),
-        sites_compared: comparisons.length,
-        cheaper_options_found: cheaperOptions,
-        potential_savings: potentialSavings,
-        savings_percentage: Math.round((potentialSavings / product.price) * 100 * 10) / 10,
-        comparison_time_ms: Date.now() - startTime
-      });
-    }
+    safeAnalyticsCall('track', 'Price Comparison Completed', {
+      product_id: extractProductId(product.url),
+      product_name: product.title,
+      current_price: product.price,
+      currency: product.currency || 'USD',
+      lowest_price: lowestPrice,
+      highest_price: highestPrice,
+      average_price: Math.round(averagePrice),
+      sites_compared: comparisons.length,
+      cheaper_options_found: cheaperOptions,
+      potential_savings: potentialSavings,
+      savings_percentage: Math.round((potentialSavings / product.price) * 100 * 10) / 10,
+      comparison_time_ms: Date.now() - startTime
+    });
     
     // Update user stats
     await updateUserStats(potentialSavings);
@@ -765,9 +759,7 @@ async function updateUserStats(savings) {
     await chrome.storage.local.set(newStats);
     
     // Update user traits (if analytics available)
-    if (analytics && typeof analytics.identify === 'function') {
-      analytics.identify(null, newStats);
-    }
+    safeAnalyticsCall('identify', null, newStats);
   } catch (error) {
     console.error('🦉 Error updating user stats:', error);
   }
@@ -856,12 +848,10 @@ function detectBrand(title) {
 // Track browser action clicks
 chrome.action.onClicked.addListener((tab) => {
   try {
-    if (analytics && typeof analytics.track === 'function') {
-      analytics.track('Extension Icon Clicked', {
-        hadProduct: !!currentProduct,
-        currentUrl: tab.url
-      });
-    }
+    safeAnalyticsCall('track', 'Extension Icon Clicked', {
+      hadProduct: !!currentProduct,
+      currentUrl: tab.url
+    });
   } catch (error) {
     console.error('🦉 Error tracking action click:', error);
   }
@@ -873,11 +863,9 @@ chrome.notifications.onClicked.addListener((notificationId) => {
     // Open popup when notification is clicked
     chrome.action.openPopup();
     
-    if (analytics && typeof analytics.track === 'function') {
-      analytics.track('Notification Clicked', {
-        notificationId: notificationId
-      });
-    }
+    safeAnalyticsCall('track', 'Notification Clicked', {
+      notificationId: notificationId
+    });
   } catch (error) {
     console.error('🦉 Error handling notification click:', error);
   }
@@ -889,22 +877,18 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
       // View Coupons button clicked
       chrome.action.openPopup();
       
-      if (analytics && typeof analytics.track === 'function') {
-        analytics.track('Notification Button Clicked', {
-          notificationId: notificationId,
-          button: 'view_coupons'
-        });
-      }
+      safeAnalyticsCall('track', 'Notification Button Clicked', {
+        notificationId: notificationId,
+        button: 'view_coupons'
+      });
     } else if (buttonIndex === 1) {
       // Dismiss button clicked
       chrome.notifications.clear(notificationId);
       
-      if (analytics && typeof analytics.track === 'function') {
-        analytics.track('Notification Button Clicked', {
-          notificationId: notificationId,
-          button: 'dismiss'
-        });
-      }
+      safeAnalyticsCall('track', 'Notification Button Clicked', {
+        notificationId: notificationId,
+        button: 'dismiss'
+      });
     }
   } catch (error) {
     console.error('🦉 Error handling notification button click:', error);
