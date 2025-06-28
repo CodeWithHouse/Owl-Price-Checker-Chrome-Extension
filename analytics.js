@@ -3,7 +3,7 @@
 class SegmentAnalytics {
   constructor() {
     // Replace with your actual Segment Write Key
-    this.writeKey = "77QBsvffW2u7PC23bxMa84IwLKnHdAATE_KEY";
+    this.writeKey = '77QBsvffW2u7PC23bxMa84IwLKnHdAATE_KEY';
     this.apiUrl = 'https://api.segment.io/v1';
     this.userId = null;
     this.anonymousId = null;
