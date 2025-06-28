@@ -124,42 +124,6 @@ let lastDomain = window.location.hostname;
 
 console.log('🦉 Owl Price Checker content script loaded on:', window.location.href);
 
-// Check if we're on a known non-ecommerce site
-function isNonEcommerceSite() {
-  try {
-    const hostname = window.location.hostname.toLowerCase();
-    const nonEcommerceSites = [
-      'claude.ai',
-      'openai.com',
-      'chat.openai.com',
-      'github.com',
-      'stackoverflow.com',
-      'reddit.com',
-      'youtube.com',
-      'google.com',
-      'bing.com',
-      'wikipedia.org',
-      'docs.google.com',
-      'gmail.com',
-      'outlook.com',
-      'slack.com',
-      'discord.com',
-      'twitter.com',
-      'x.com',
-      'facebook.com',
-      'instagram.com',
-      'linkedin.com',
-      'medium.com',
-      'news.ycombinator.com'
-    ];
-    
-    return nonEcommerceSites.some(site => hostname.includes(site));
-  } catch (error) {
-    console.error('🦉 Error checking non-ecommerce site:', error);
-    return false;
-  }
-}
-
 // Generate a simple hash for product URLs to detect changes
 function generateProductHash(url, title, price) {
   try {
@@ -346,7 +310,13 @@ function detectCurrency(priceText) {
 // Detect if current page is an e-commerce product page
 function isProductPage() {
   try {
-    if (isNonEcommerceSite()) {
+    // Immediate exit for known non-ecommerce sites
+    const hostname = window.location.hostname;
+    if (hostname.includes('claude.ai') || 
+        hostname.includes('openai.com') || 
+        hostname.includes('github.com') ||
+        hostname.includes('google.com') ||
+        hostname.includes('stackoverflow.com')) {
       return false;
     }
     
@@ -520,17 +490,31 @@ function detectSiteName() {
   try {
     const hostname = window.location.hostname;
     
+    // Quick exit for non-ecommerce sites to prevent DOM operations
+    if (hostname.includes('claude.ai') || 
+        hostname.includes('openai.com') || 
+        hostname.includes('github.com') ||
+        hostname.includes('google.com') ||
+        hostname.includes('stackoverflow.com')) {
+      return 'Non-Ecommerce Site';
+    }
+    
     if (hostname.includes('nike.com')) return 'Nike';
     if (hostname.includes('amazon')) return 'Amazon';
     if (hostname.includes('ebay')) return 'eBay';
     if (hostname.includes('walmart')) return 'Walmart';
     if (hostname.includes('target')) return 'Target';
     
+    // Safe string operations only
     let siteName = hostname
       .replace(/^www\./, '')
       .replace(/\.(com|net|org|co|io|store|shop|in|uk|ca|au|de|fr|es|it|jp|cn|sg).*$/, '');
     
-    siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
+    if (siteName && siteName.length > 0) {
+      siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
+    } else {
+      siteName = 'Unknown Site';
+    }
     
     return siteName;
   } catch (error) {
@@ -542,12 +526,17 @@ function detectSiteName() {
 // Extract product information with comprehensive error handling
 function extractProductInfo() {
   try {
-    if (isNonEcommerceSite()) {
+    // Immediate exit for known non-ecommerce sites
+    const hostname = window.location.hostname;
+    if (hostname.includes('claude.ai') || 
+        hostname.includes('openai.com') || 
+        hostname.includes('github.com') ||
+        hostname.includes('google.com') ||
+        hostname.includes('stackoverflow.com')) {
       return null;
     }
     
     if (!isProductPage()) {
-      console.log('🦉 Not a product page');
       return null;
     }
     
@@ -731,6 +720,16 @@ function sendProductInfo() {
 // Initialize with debouncing
 function initialize() {
   try {
+    // Skip initialization on non-ecommerce sites
+    const hostname = window.location.hostname;
+    if (hostname.includes('claude.ai') || 
+        hostname.includes('openai.com') || 
+        hostname.includes('github.com') ||
+        hostname.includes('google.com') ||
+        hostname.includes('stackoverflow.com')) {
+      return;
+    }
+    
     console.log('🦉 Initializing Owl Price Checker on:', window.location.href);
     
     if (detectionTimeout) {
