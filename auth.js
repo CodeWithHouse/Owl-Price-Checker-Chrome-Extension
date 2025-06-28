@@ -1,17 +1,22 @@
-// auth.js - Authentication logic for Owl Price Checker
+// auth.js - Fixed Authentication logic for Owl Price Checker
 
 class AuthManager {
   constructor() {
+    this.isProcessing = false; // Prevent double submissions
+    this.analyticsLoaded = false;
     this.init();
   }
 
   async init() {
-    // Load analytics
+    console.log('🦉 AuthManager initializing...');
+    
+    // Load analytics first
     await this.loadAnalytics();
     
     // Check if user is already logged in
     const userData = await chrome.storage.local.get(['user', 'isLoggedIn']);
     if (userData.isLoggedIn && userData.user) {
+      console.log('🦉 User already logged in:', userData.user.firstName);
       this.showSuccessState(userData.user);
       return;
     }
@@ -19,8 +24,8 @@ class AuthManager {
     // Set up event listeners
     this.setupEventListeners();
     
-    // Track page view
-    if (typeof analytics !== 'undefined') {
+    // Track page view (only once)
+    if (this.analyticsLoaded && typeof analytics !== 'undefined') {
       analytics.screen('Authentication Page', {
         timestamp: new Date().toISOString()
       });
@@ -31,6 +36,8 @@ class AuthManager {
     return new Promise((resolve) => {
       // Check if analytics is already loaded
       if (typeof analytics !== 'undefined') {
+        this.analyticsLoaded = true;
+        console.log('🦉 Analytics already available');
         resolve();
         return;
       }
@@ -38,58 +45,92 @@ class AuthManager {
       const script = document.createElement('script');
       script.src = 'analytics.js';
       script.onload = () => {
-        console.log('Analytics loaded successfully');
+        console.log('🦉 Analytics loaded successfully');
+        this.analyticsLoaded = true;
         resolve();
       };
       script.onerror = (error) => {
-        console.error('Failed to load analytics:', error);
+        console.error('🦉 Failed to load analytics:', error);
+        this.analyticsLoaded = false;
         resolve(); // Continue even if analytics fails
       };
       document.head.appendChild(script);
       
       // Timeout fallback
-      setTimeout(resolve, 2000);
+      setTimeout(() => {
+        console.warn('🦉 Analytics load timeout');
+        this.analyticsLoaded = false;
+        resolve();
+      }, 3000);
     });
   }
 
   setupEventListeners() {
     // Form switching
-    document.getElementById('showLoginForm').addEventListener('click', (e) => {
-      e.preventDefault();
-      this.showLoginForm();
-    });
+    const showLoginBtn = document.getElementById('showLoginForm');
+    const showSignupBtn = document.getElementById('showSignupForm');
+    
+    if (showLoginBtn) {
+      showLoginBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showLoginForm();
+      });
+    }
 
-    document.getElementById('showSignupForm').addEventListener('click', (e) => {
-      e.preventDefault();
-      this.showSignupForm();
-    });
+    if (showSignupBtn) {
+      showSignupBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showSignupForm();
+      });
+    }
 
     // Form submissions
-    document.getElementById('signupFormElement').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.handleSignup();
-    });
+    const signupForm = document.getElementById('signupFormElement');
+    const loginForm = document.getElementById('loginFormElement');
+    
+    if (signupForm) {
+      signupForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!this.isProcessing) {
+          this.handleSignup();
+        }
+      });
+    }
 
-    document.getElementById('loginFormElement').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.handleLogin();
-    });
+    if (loginForm) {
+      loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!this.isProcessing) {
+          this.handleLogin();
+        }
+      });
+    }
 
     // Continue button
-    document.getElementById('continueBtn').addEventListener('click', () => {
-      window.close(); // Close the auth window
-    });
+    const continueBtn = document.getElementById('continueBtn');
+    if (continueBtn) {
+      continueBtn.addEventListener('click', () => {
+        window.close(); // Close the auth window
+      });
+    }
 
     // Terms and privacy links
-    document.getElementById('termsLink').addEventListener('click', (e) => {
-      e.preventDefault();
-      this.openTerms();
-    });
+    const termsLink = document.getElementById('termsLink');
+    const privacyLink = document.getElementById('privacyLink');
+    
+    if (termsLink) {
+      termsLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.openTerms();
+      });
+    }
 
-    document.getElementById('privacyLink').addEventListener('click', (e) => {
-      e.preventDefault();
-      this.openPrivacy();
-    });
+    if (privacyLink) {
+      privacyLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.openPrivacy();
+      });
+    }
 
     // Real-time validation
     this.setupValidation();
@@ -173,7 +214,7 @@ class AuthManager {
     document.getElementById('successState').classList.add('hidden');
     
     // Track form switch
-    if (typeof analytics !== 'undefined') {
+    if (this.analyticsLoaded && typeof analytics !== 'undefined') {
       analytics.track('Auth Form Switched', {
         from: 'signup',
         to: 'login'
@@ -187,7 +228,7 @@ class AuthManager {
     document.getElementById('successState').classList.add('hidden');
     
     // Track form switch
-    if (typeof analytics !== 'undefined') {
+    if (this.analyticsLoaded && typeof analytics !== 'undefined') {
       analytics.track('Auth Form Switched', {
         from: 'login',
         to: 'signup'
@@ -196,37 +237,43 @@ class AuthManager {
   }
 
   async handleSignup() {
+    if (this.isProcessing) {
+      console.log('🦉 Signup already in progress, ignoring duplicate request');
+      return;
+    }
+
+    this.isProcessing = true;
     console.log('🦉 Starting signup process...');
     
-    const form = document.getElementById('signupFormElement');
-    const formData = new FormData(form);
-    
-    const firstName = formData.get('firstName')?.trim() || '';
-    const email = formData.get('email')?.trim() || '';
-    const agreeTerms = document.getElementById('agreeTerms')?.checked || false;
-    const marketingEmails = document.getElementById('marketingEmails')?.checked || false;
-
-    console.log('🦉 Form data:', { firstName, email, agreeTerms, marketingEmails });
-
-    // Enhanced validation
-    if (!firstName || firstName.length < 2) {
-      this.showError('Please enter a valid first name (at least 2 characters)');
-      return;
-    }
-
-    if (!email || !this.isValidEmail(email)) {
-      this.showError('Please enter a valid email address');
-      return;
-    }
-
-    if (!agreeTerms) {
-      this.showError('Please agree to the Terms of Service and Privacy Policy');
-      return;
-    }
-
-    this.setLoading(true, 'signupBtn');
-
     try {
+      const form = document.getElementById('signupFormElement');
+      const formData = new FormData(form);
+      
+      const firstName = formData.get('firstName')?.trim() || '';
+      const email = formData.get('email')?.trim() || '';
+      const agreeTerms = document.getElementById('agreeTerms')?.checked || false;
+      const marketingEmails = document.getElementById('marketingEmails')?.checked || false;
+
+      console.log('🦉 Form data:', { firstName, email, agreeTerms, marketingEmails });
+
+      // Enhanced validation
+      if (!firstName || firstName.length < 2) {
+        this.showError('Please enter a valid first name (at least 2 characters)');
+        return;
+      }
+
+      if (!email || !this.isValidEmail(email)) {
+        this.showError('Please enter a valid email address');
+        return;
+      }
+
+      if (!agreeTerms) {
+        this.showError('Please agree to the Terms of Service and Privacy Policy');
+        return;
+      }
+
+      this.setLoading(true, 'signupBtn');
+
       console.log('🦉 Checking for existing users...');
       
       // Check if email already exists
@@ -274,18 +321,23 @@ class AuthManager {
 
       console.log('🦉 User data saved to storage');
 
-      // Track successful signup
-      if (typeof analytics !== 'undefined') {
+      // Track successful signup - ONLY ONCE
+      if (this.analyticsLoaded && typeof analytics !== 'undefined') {
         console.log('🦉 Tracking signup...');
         
+        // Single identify call for signup
         analytics.identify(user.id, {
           firstName: user.firstName,
           email: user.email,
           marketing_emails: user.marketingEmails,
           signup_date: user.createdAt,
-          user_type: 'registered'
+          user_type: 'registered',
+          created_at: user.createdAt,
+          coupons_earned: user.couponsEarned,
+          total_savings: user.totalSavings
         });
 
+        // Single track call for signup
         analytics.track('User Signed Up', {
           user_id: user.id,
           email: user.email,
@@ -296,20 +348,8 @@ class AuthManager {
           welcome_coupon_earned: true,
           timestamp: user.createdAt
         });
-
-        // Also track the sign in event immediately after signup
-        analytics.track('User Signed In', {
-          user_id: user.id,
-          email: user.email,
-          first_name: user.firstName,
-          login_method: 'new_account',
-          login_source: 'extension',
-          is_first_login: true,
-          session_id: this.generateSessionId(),
-          timestamp: new Date().toISOString()
-        });
       } else {
-        console.warn('🦉 Analytics not available for tracking');
+        console.warn('🦉 Analytics not available for tracking signup');
       }
 
       // Send welcome email (simulated)
@@ -324,38 +364,38 @@ class AuthManager {
       this.showError('Failed to create account. Please try again.');
       
       // Track signup error
-      if (typeof analytics !== 'undefined') {
+      if (this.analyticsLoaded && typeof analytics !== 'undefined') {
         analytics.track('Signup Failed', {
-          error: error.message,
-          email: email
+          error: error.message
         });
       }
     } finally {
       this.setLoading(false, 'signupBtn');
+      this.isProcessing = false;
     }
-  }
-
-  // Add email validation helper
-  isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
   }
 
   async handleLogin() {
-    console.log('🦉 Starting login process...');
-    
-    const email = document.getElementById('loginEmail').value.trim();
-
-    console.log('🦉 Login attempt for email:', email);
-
-    if (!email || !this.isValidEmail(email)) {
-      this.showError('Please enter a valid email address');
+    if (this.isProcessing) {
+      console.log('🦉 Login already in progress, ignoring duplicate request');
       return;
     }
 
-    this.setLoading(true, 'loginBtn');
-
+    this.isProcessing = true;
+    console.log('🦉 Starting login process...');
+    
     try {
+      const email = document.getElementById('loginEmail').value.trim();
+
+      console.log('🦉 Login attempt for email:', email);
+
+      if (!email || !this.isValidEmail(email)) {
+        this.showError('Please enter a valid email address');
+        return;
+      }
+
+      this.setLoading(true, 'loginBtn');
+
       console.log('🦉 Checking for existing user...');
       
       // Simulate API delay
@@ -391,15 +431,11 @@ class AuthManager {
 
       console.log('🦉 Login successful, user data updated');
 
-      // Track successful login
-      if (typeof analytics !== 'undefined') {
+      // Track successful login - ONLY ONCE
+      if (this.analyticsLoaded && typeof analytics !== 'undefined') {
         console.log('🦉 Tracking login...');
         
-        // Get additional data for enhanced identification
-        const totalLogins = await this.incrementLoginCount(user.id);
-        const loginStreak = await this.calculateLoginStreak(user.id);
-        
-        // Enhanced user identification with comprehensive profile data
+        // Single identify call for login
         analytics.identify(user.id, {
           firstName: user.firstName,
           email: user.email,
@@ -407,13 +443,12 @@ class AuthManager {
           user_type: 'returning',
           signup_date: user.createdAt,
           marketing_emails: user.marketingEmails,
-          total_logins: totalLogins,
-          days_since_signup: this.calculateDaysSinceSignup(user.createdAt),
-          account_status: 'active',
-          login_streak: loginStreak,
-          preferred_login_method: 'email'
+          total_logins: await this.incrementLoginCount(user.id),
+          coupons_earned: user.couponsEarned || 0,
+          total_savings: user.totalSavings || 0
         });
 
+        // Single track call for login
         analytics.track('User Signed In', {
           user_id: user.id,
           email: user.email,
@@ -421,12 +456,10 @@ class AuthManager {
           login_method: 'email',
           login_source: 'extension',
           is_first_login: false,
-          days_since_signup: this.calculateDaysSinceSignup(user.createdAt),
-          session_id: this.generateSessionId(),
           timestamp: user.lastLogin
         });
       } else {
-        console.warn('🦉 Analytics not available for tracking');
+        console.warn('🦉 Analytics not available for tracking login');
       }
 
       // Show success state
@@ -438,14 +471,14 @@ class AuthManager {
       this.showError('Failed to sign in. Please try again.');
       
       // Track login error
-      if (typeof analytics !== 'undefined') {
+      if (this.analyticsLoaded && typeof analytics !== 'undefined') {
         analytics.track('Login Failed', {
-          error: error.message,
-          email: email
+          error: error.message
         });
       }
     } finally {
       this.setLoading(false, 'loginBtn');
+      this.isProcessing = false;
     }
   }
 
@@ -501,8 +534,27 @@ class AuthManager {
     }, 4000);
   }
 
+  // Helper methods
   generateUserId() {
     return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  async incrementLoginCount(userId) {
+    try {
+      const data = await chrome.storage.local.get(['userLoginCounts']);
+      const counts = data.userLoginCounts || {};
+      counts[userId] = (counts[userId] || 0) + 1;
+      await chrome.storage.local.set({ userLoginCounts: counts });
+      return counts[userId];
+    } catch (error) {
+      console.error('Error incrementing login count:', error);
+      return 1;
+    }
   }
 
   async sendWelcomeEmail(user) {
@@ -540,7 +592,7 @@ class AuthManager {
       pendingCoupons: welcomeEmail.coupons 
     });
 
-    console.log('Welcome email queued:', welcomeEmail);
+    console.log('🦉 Welcome email queued:', welcomeEmail);
   }
 
   openTerms() {
@@ -548,7 +600,7 @@ class AuthManager {
       url: 'https://owlpricechecker.com/terms' // Replace with your actual terms URL
     });
     
-    if (typeof analytics !== 'undefined') {
+    if (this.analyticsLoaded && typeof analytics !== 'undefined') {
       analytics.track('Terms of Service Viewed', {
         source: 'auth_page'
       });
@@ -560,7 +612,7 @@ class AuthManager {
       url: 'https://owlpricechecker.com/privacy' // Replace with your actual privacy URL
     });
     
-    if (typeof analytics !== 'undefined') {
+    if (this.analyticsLoaded && typeof analytics !== 'undefined') {
       analytics.track('Privacy Policy Viewed', {
         source: 'auth_page'
       });
@@ -570,6 +622,7 @@ class AuthManager {
 
 // Initialize auth manager when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('🦉 DOM loaded, initializing AuthManager');
   new AuthManager();
 });
 

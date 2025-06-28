@@ -1,4 +1,4 @@
-// analytics.js - Segment Analytics Integration for Owl Price Checker (Fixed)
+// analytics.js - Fixed Segment Analytics Integration for Owl Price Checker
 
 class SegmentAnalytics {
   constructor() {
@@ -9,6 +9,11 @@ class SegmentAnalytics {
     this.anonymousId = null;
     this.sessionId = null;
     this.debug = true; // Enable debug for troubleshooting
+    
+    // Prevent duplicate calls
+    this.lastIdentifyHash = null;
+    this.identifyQueue = new Set();
+    this.trackQueue = new Set();
     
     // Initialize
     this.init();
@@ -48,10 +53,8 @@ class SegmentAnalytics {
         await chrome.storage.local.set({ anonymousId: this.anonymousId });
       }
 
-      // Auto-identify with stored traits
-      if (stored.userTraits) {
-        await this.identify(this.userId, stored.userTraits);
-      }
+      // Don't auto-identify on init to prevent duplicate calls
+      // The auth system will handle identification
     } catch (error) {
       console.error('🦉 Error initializing user:', error);
     }
@@ -212,13 +215,41 @@ class SegmentAnalytics {
     }
   }
 
-  // Track event (following Segment Track spec)
+  // Create hash for deduplication
+  createCallHash(type, userId, data) {
+    const hashData = {
+      type,
+      userId: userId || this.anonymousId,
+      data: typeof data === 'object' ? JSON.stringify(data) : data,
+      timestamp: Math.floor(Date.now() / 10000) // 10 second window
+    };
+    return btoa(JSON.stringify(hashData)).substring(0, 16);
+  }
+
+  // Track event (following Segment Track spec) with deduplication
   async track(event, properties = {}) {
     try {
       if (!event) {
         console.error('🦉 Track event name is required');
         return false;
       }
+
+      // Create hash for deduplication
+      const callHash = this.createCallHash('track', this.userId, { event, properties });
+      
+      if (this.trackQueue.has(callHash)) {
+        if (this.debug) {
+          console.log('🦉 Duplicate track call prevented:', event);
+        }
+        return false;
+      }
+      
+      this.trackQueue.add(callHash);
+      
+      // Clean up old hashes after 30 seconds
+      setTimeout(() => {
+        this.trackQueue.delete(callHash);
+      }, 30000);
 
       // Add common e-commerce properties if applicable
       const enhancedProperties = this.enhanceProperties(event, properties);
@@ -249,9 +280,42 @@ class SegmentAnalytics {
     }
   }
 
-  // Identify user (following Segment Identify spec)
+  // Identify user (following Segment Identify spec) with strict deduplication
   async identify(userId, traits = {}) {
     try {
+      // Create hash for deduplication - more strict for identify calls
+      const identifyData = {
+        userId: userId || this.userId,
+        traits: JSON.stringify(traits),
+        timestamp: Math.floor(Date.now() / 5000) // 5 second window for identify
+      };
+      const identifyHash = btoa(JSON.stringify(identifyData)).substring(0, 20);
+      
+      if (this.lastIdentifyHash === identifyHash) {
+        if (this.debug) {
+          console.log('🦉 Duplicate identify call prevented for user:', userId);
+        }
+        return false;
+      }
+      
+      if (this.identifyQueue.has(identifyHash)) {
+        if (this.debug) {
+          console.log('🦉 Identify call already in queue:', userId);
+        }
+        return false;
+      }
+      
+      this.identifyQueue.add(identifyHash);
+      this.lastIdentifyHash = identifyHash;
+      
+      // Clean up after 60 seconds
+      setTimeout(() => {
+        this.identifyQueue.delete(identifyHash);
+        if (this.lastIdentifyHash === identifyHash) {
+          this.lastIdentifyHash = null;
+        }
+      }, 60000);
+
       if (userId) {
         this.userId = userId;
         await chrome.storage.local.set({ userId: userId, userTraits: traits });
@@ -314,9 +378,26 @@ class SegmentAnalytics {
     }
   }
 
-  // Screen view (for extension popup)
+  // Screen view (for extension popup) with deduplication
   async screen(name, properties = {}) {
     try {
+      // Create hash for deduplication
+      const callHash = this.createCallHash('screen', this.userId, { name, properties });
+      
+      if (this.trackQueue.has(callHash)) {
+        if (this.debug) {
+          console.log('🦉 Duplicate screen call prevented:', name);
+        }
+        return false;
+      }
+      
+      this.trackQueue.add(callHash);
+      
+      // Clean up old hashes after 30 seconds
+      setTimeout(() => {
+        this.trackQueue.delete(callHash);
+      }, 30000);
+
       const payload = {
         anonymousId: this.anonymousId,
         name: name,
@@ -461,7 +542,11 @@ class SegmentAnalytics {
       sessionId: this.sessionId,
       analyticsEnabled: storage.analyticsEnabled !== false,
       eventCount: storage.eventLog?.length || 0,
-      lastEvents: storage.eventLog?.slice(-5) || []
+      lastEvents: storage.eventLog?.slice(-5) || [],
+      queueSizes: {
+        identifyQueue: this.identifyQueue.size,
+        trackQueue: this.trackQueue.size
+      }
     };
   }
 
@@ -469,6 +554,16 @@ class SegmentAnalytics {
   setDebugMode(enabled) {
     this.debug = enabled;
     console.log(`🦉 Analytics debug mode ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  // Clear all queues (for testing)
+  clearQueues() {
+    this.identifyQueue.clear();
+    this.trackQueue.clear();
+    this.lastIdentifyHash = null;
+    if (this.debug) {
+      console.log('🦉 Analytics queues cleared');
+    }
   }
 
   // Batch events (for future implementation)
@@ -544,5 +639,10 @@ if (typeof window !== 'undefined') {
     await analytics.testConnection();
     const debugInfo = await analytics.getDebugInfo();
     console.log('🦉 Debug info:', debugInfo);
+  };
+  
+  window.owlAnalyticsClear = () => {
+    analytics.clearQueues();
+    console.log('🦉 Analytics queues cleared');
   };
 }
