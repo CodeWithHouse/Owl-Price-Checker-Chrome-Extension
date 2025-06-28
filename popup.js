@@ -331,21 +331,42 @@ function openAuthWindow() {
 }
 
 async function handleLogout() {
+  // Get current user data before logout for tracking
+  const userData = await chrome.storage.local.get(['user']);
+  const currentUser = userData.user;
+  
   // Confirm logout
   if (!confirm('Are you sure you want to sign out?')) {
     return;
   }
   
   try {
-    // Clear user data
-    await chrome.storage.local.remove(['user', 'isLoggedIn', 'pendingCoupons']);
-    
-    // Track logout
-    if (typeof analytics !== 'undefined') {
-      analytics.track('User Logged Out', {
-        source: 'popup'
+    // Track logout before clearing data
+    if (typeof analytics !== 'undefined' && currentUser) {
+      analytics.track('User Signed Out', {
+        user_id: currentUser.id,
+        email: currentUser.email,
+        first_name: currentUser.firstName,
+        logout_method: 'manual',
+        logout_source: 'popup_button',
+        session_duration_minutes: calculateSessionDuration(),
+        total_savings: currentUser.totalSavings || 0,
+        total_coupons: currentUser.couponsEarned || 0,
+        timestamp: new Date().toISOString()
+      });
+
+      // Track session end
+      analytics.track('Session Ended', {
+        user_id: currentUser.id,
+        session_type: 'authenticated',
+        session_duration_minutes: calculateSessionDuration(),
+        logout_reason: 'user_initiated',
+        timestamp: new Date().toISOString()
       });
     }
+    
+    // Clear user data
+    await chrome.storage.local.remove(['user', 'isLoggedIn', 'pendingCoupons', 'sessionStartTime']);
     
     // Reload popup data
     loadProductData();
@@ -354,7 +375,27 @@ async function handleLogout() {
   } catch (error) {
     console.error('Logout error:', error);
     showError('Failed to sign out. Please try again.');
+    
+    // Track logout error
+    if (typeof analytics !== 'undefined') {
+      analytics.track('Logout Failed', {
+        error: error.message,
+        user_id: currentUser?.id,
+        timestamp: new Date().toISOString()
+      });
+    }
   }
+}
+
+// Calculate session duration
+function calculateSessionDuration() {
+  const sessionStart = localStorage.getItem('sessionStartTime');
+  if (!sessionStart) return 0;
+  
+  const startTime = new Date(sessionStart);
+  const endTime = new Date();
+  const durationMs = endTime - startTime;
+  return Math.round(durationMs / (1000 * 60)); // Convert to minutes
 }
 
 // Add showError and showSuccess functions

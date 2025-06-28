@@ -93,9 +93,154 @@ function openAuthWindow() {
   }, (window) => {
     // Track auth window opened
     analytics.track('Auth Window Opened', {
-      windowId: window.id
+      windowId: window.id,
+      timestamp: new Date().toISOString()
     });
   });
+}
+
+// Listen for authentication completion
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local') {
+    // Track when user logs in/out
+    if (changes.isLoggedIn) {
+      if (changes.isLoggedIn.newValue === true && changes.isLoggedIn.oldValue !== true) {
+        // User just logged in
+        handleUserSignIn();
+      } else if (changes.isLoggedIn.newValue === false && changes.isLoggedIn.oldValue === true) {
+        // User just logged out
+        handleUserSignOut();
+      }
+    }
+  }
+});
+
+// Handle user sign in event
+async function handleUserSignIn() {
+  const userData = await chrome.storage.local.get(['user']);
+  const user = userData.user;
+  
+  if (user) {
+    // Set session start time
+    await chrome.storage.local.set({ 
+      sessionStartTime: new Date().toISOString() 
+    });
+    
+    // Get additional user stats for identify
+    const stats = await getUserStatsForIdentify(user.id);
+    
+    // Enhanced user identification on sign in
+    analytics.identify(user.id, {
+      firstName: user.firstName,
+      email: user.email,
+      signup_date: user.createdAt,
+      last_active: new Date().toISOString(),
+      total_sessions: await incrementUserSessions(user.id),
+      total_savings: user.totalSavings || 0,
+      total_coupons: user.couponsEarned || 0,
+      marketing_emails: user.marketingEmails,
+      account_status: 'active',
+      user_type: 'returning',
+      extension_version: chrome.runtime.getManifest().version,
+      ...stats // Additional computed stats
+    });
+    
+    // Track session start
+    analytics.track('Session Started', {
+      user_id: user.id,
+      session_type: 'authenticated',
+      login_method: 'extension',
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log('User signed in successfully:', user.firstName);
+  }
+}
+
+// Get additional user stats for identify event
+async function getUserStatsForIdentify(userId) {
+  try {
+    const data = await chrome.storage.local.get([
+      'userCoupons',
+      'userActivity', 
+      'userLoginCounts',
+      'userLoginHistory'
+    ]);
+    
+    const coupons = data.userCoupons || [];
+    const activity = data.userActivity || [];
+    const loginCounts = data.userLoginCounts || {};
+    const loginHistory = data.userLoginHistory || {};
+    
+    // Calculate stats
+    const activeCoupons = coupons.filter(c => 
+      c.userId === userId && 
+      !c.used && 
+      new Date(c.expiresAt) > new Date()
+    );
+    
+    const usedCoupons = coupons.filter(c => 
+      c.userId === userId && c.used
+    );
+    
+    const recentActivity = activity.filter(a => 
+      Date.now() - new Date(a.timestamp).getTime() < 30 * 24 * 60 * 60 * 1000
+    );
+    
+    const uniqueSites = [...new Set(recentActivity.map(a => a.site))];
+    
+    return {
+      active_coupons: activeCoupons.length,
+      used_coupons: usedCoupons.length,
+      total_logins: loginCounts[userId] || 1,
+      recent_sites_visited: uniqueSites.length,
+      days_active_last_30: Math.min(recentActivity.length, 30),
+      favorite_sites: uniqueSites.slice(0, 3) // Top 3 sites
+    };
+  } catch (error) {
+    console.error('Error getting user stats for identify:', error);
+    return {};
+  }
+}
+
+// Handle user sign out event
+async function handleUserSignOut() {
+  // Track session analytics before complete logout
+  const sessionData = await chrome.storage.local.get(['sessionStartTime']);
+  
+  if (sessionData.sessionStartTime) {
+    const sessionDuration = calculateSessionDuration(sessionData.sessionStartTime);
+    
+    analytics.track('Authentication Session Ended', {
+      session_duration_minutes: sessionDuration,
+      session_end_reason: 'user_logout',
+      timestamp: new Date().toISOString()
+    });
+  }
+  
+  // Clear session data
+  await chrome.storage.local.remove(['sessionStartTime']);
+  
+  console.log('User signed out successfully');
+}
+
+// Increment user session count
+async function incrementUserSessions(userId) {
+  const userData = await chrome.storage.local.get(['userSessions']);
+  const sessions = userData.userSessions || {};
+  
+  sessions[userId] = (sessions[userId] || 0) + 1;
+  await chrome.storage.local.set({ userSessions: sessions });
+  
+  return sessions[userId];
+}
+
+// Calculate session duration in minutes
+function calculateSessionDuration(startTime) {
+  const start = new Date(startTime);
+  const end = new Date();
+  const durationMs = end - start;
+  return Math.round(durationMs / (1000 * 60)); // Convert to minutes
 }
 
 // Clear all product-related data

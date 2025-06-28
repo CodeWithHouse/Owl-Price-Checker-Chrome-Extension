@@ -250,9 +250,25 @@ class AuthManager {
 
         analytics.track('User Signed Up', {
           user_id: user.id,
+          email: user.email,
+          first_name: user.firstName,
           marketing_emails_opted_in: user.marketingEmails,
           signup_method: 'extension',
-          welcome_coupon_earned: true
+          signup_source: 'price_comparison_popup',
+          welcome_coupon_earned: true,
+          timestamp: user.createdAt
+        });
+
+        // Also track the sign in event immediately after signup
+        analytics.track('User Signed In', {
+          user_id: user.id,
+          email: user.email,
+          first_name: user.firstName,
+          login_method: 'new_account',
+          login_source: 'extension',
+          is_first_login: true,
+          session_id: this.generateSessionId(),
+          timestamp: new Date().toISOString()
         });
       }
 
@@ -318,18 +334,33 @@ class AuthManager {
         registeredUsers: users
       });
 
-      // Track successful login
+      // Track successful login with enhanced identify
       if (typeof analytics !== 'undefined') {
+        // Enhanced user identification with comprehensive profile data
         analytics.identify(user.id, {
           firstName: user.firstName,
           email: user.email,
           last_login: user.lastLogin,
-          user_type: 'returning'
+          user_type: 'returning',
+          signup_date: user.createdAt,
+          marketing_emails: user.marketingEmails,
+          total_logins: await this.incrementLoginCount(user.id),
+          days_since_signup: this.calculateDaysSinceSignup(user.createdAt),
+          account_status: 'active',
+          login_streak: await this.calculateLoginStreak(user.id),
+          preferred_login_method: 'email'
         });
 
-        analytics.track('User Logged In', {
+        analytics.track('User Signed In', {
           user_id: user.id,
-          login_method: 'extension'
+          email: user.email,
+          first_name: user.firstName,
+          login_method: 'email',
+          login_source: 'extension',
+          is_first_login: false,
+          days_since_signup: this.calculateDaysSinceSignup(user.createdAt),
+          session_id: this.generateSessionId(),
+          timestamp: user.lastLogin
         });
       }
 
