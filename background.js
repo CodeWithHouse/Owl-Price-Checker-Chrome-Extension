@@ -248,7 +248,9 @@ function clearAllProductData(callback) {
   currentProduct = null;
   lastProductHash = null;
   
-  chrome.storage.local.remove(['currentProduct', 'comparisons', 'lastUpdated'], () => {
+  console.log('Clearing all product data');
+  
+  chrome.storage.local.remove(['currentProduct', 'comparisons', 'lastUpdated', 'productHash'], () => {
     if (callback) callback();
   });
 }
@@ -258,12 +260,14 @@ function handleProductDetection(productData) {
   // Check if this is actually a new product
   const productHash = productData.hash || generateProductHash(productData);
   
-  if (lastProductHash === productHash) {
-    console.log('Same product hash detected, skipping update');
+  if (lastProductHash === productHash && currentProduct && 
+      currentProduct.url === productData.url) {
+    console.log('Same product hash and URL detected, skipping update');
     return;
   }
   
   // This is a new product
+  console.log('New product detected:', productData.title, 'on', productData.site);
   lastProductHash = productHash;
   currentProduct = productData;
   

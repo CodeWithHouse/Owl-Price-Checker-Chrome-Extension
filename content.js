@@ -1,4 +1,4 @@
-// content.js - Owl Price Checker Universal E-commerce Content Script (Fixed Navigation)
+// content.js - Owl Price Checker Universal E-commerce Content Script (Complete Fixed)
 
 // Currency symbols and codes mapping
 const CURRENCY_MAP = {
@@ -120,12 +120,20 @@ const ECOMMERCE_INDICATORS = [
 let lastDetectedProduct = null;
 let detectionTimeout = null;
 let lastUrl = window.location.href; // Track URL changes more reliably
+let lastDomain = window.location.hostname; // Track domain changes
+
+console.log('Owl Price Checker content script loaded on:', window.location.href);
 
 // Generate a simple hash for product URLs to detect changes
 function generateProductHash(url, title, price) {
-  // Create a simple hash from URL path + title + price
-  const urlPath = new URL(url).pathname;
-  return btoa(urlPath + title + price).substring(0, 16);
+  try {
+    // Create a simple hash from URL path + title + price
+    const urlPath = new URL(url).pathname;
+    return btoa(urlPath + title + price).substring(0, 16);
+  } catch (error) {
+    console.error('Error generating product hash:', error);
+    return 'fallback_' + Date.now();
+  }
 }
 
 // Check if we're on a new product page
@@ -153,21 +161,41 @@ function isNewProduct(productInfo) {
   return titleChanged || priceChanged || urlChanged;
 }
 
-// Clear stored data when navigating to new product
+// Clear stored data when navigating to new domain/product
 function clearProductDataIfNeeded() {
   const currentUrl = window.location.href;
+  const currentDomain = window.location.hostname;
   
-  // Always clear when URL changes significantly
-  if (currentUrl !== lastUrl) {
-    console.log('URL changed from', lastUrl, 'to', currentUrl);
-    lastUrl = currentUrl;
+  // Check if domain changed
+  if (currentDomain !== lastDomain) {
+    console.log('Domain changed from', lastDomain, 'to', currentDomain);
+    lastDomain = currentDomain;
     lastDetectedProduct = null;
     
-    // Clear stored data
+    // Clear stored data for domain change
     chrome.runtime.sendMessage({
       action: 'clearProduct'
     });
+    return true;
   }
+  
+  // Check if URL changed significantly within same domain
+  if (currentUrl !== lastUrl) {
+    console.log('URL changed from', lastUrl, 'to', currentUrl);
+    lastUrl = currentUrl;
+    
+    // For significant URL changes, clear product data
+    const urlDiff = Math.abs(currentUrl.length - lastUrl.length);
+    if (urlDiff > 10) { // Significant URL change
+      lastDetectedProduct = null;
+      chrome.runtime.sendMessage({
+        action: 'clearProduct'
+      });
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 // Enhanced price extraction for Nike
@@ -394,7 +422,7 @@ function detectSiteName() {
   return siteName;
 }
 
-// Extract product information
+// Extract product information with comprehensive error handling
 function extractProductInfo() {
   try {
     if (!isProductPage()) {
@@ -408,7 +436,7 @@ function extractProductInfo() {
     
     // Clean up title
     if (!title || title.length < 5) {
-      title = document.title.split('|')[0].split('-')[0].trim();
+      title = document.title ? document.title.split('|')[0].split('-')[0].trim() : '';
     }
     
     // Extract price
@@ -439,38 +467,43 @@ function extractProductInfo() {
     // Detect currency
     const currency = detectCurrency(priceText);
     
-    // Extract image
+    // Extract image with better error handling
     let image = '';
     
-    // Try meta tags first
-    const metaImage = document.querySelector('meta[property="og:image"]') ||
-                     document.querySelector('meta[name="twitter:image"]');
-    if (metaImage) {
-      image = metaImage.content;
-    }
-    
-    // Try pattern selectors
-    if (!image) {
-      for (const selector of UNIVERSAL_PATTERNS.image) {
-        if (!selector.startsWith('meta')) {
-          const imgElement = document.querySelector(selector);
-          if (imgElement) {
-            image = imgElement.src || imgElement.getAttribute('src') || '';
-            if (image) break;
+    try {
+      // Try meta tags first
+      const metaImage = document.querySelector('meta[property="og:image"]') ||
+                       document.querySelector('meta[name="twitter:image"]');
+      if (metaImage && metaImage.content) {
+        image = metaImage.content;
+      }
+      
+      // Try pattern selectors
+      if (!image) {
+        for (const selector of UNIVERSAL_PATTERNS.image) {
+          if (!selector.startsWith('meta')) {
+            const imgElement = document.querySelector(selector);
+            if (imgElement && imgElement.src) {
+              image = imgElement.src;
+              break;
+            }
           }
         }
       }
-    }
-    
-    // Fallback to any large image
-    if (!image) {
-      const images = document.querySelectorAll('img');
-      for (const img of images) {
-        if (img.width > 200 && img.height > 200 && !img.src.includes('logo')) {
-          image = img.src;
-          break;
+      
+      // Fallback to any large image
+      if (!image) {
+        const images = document.querySelectorAll('img');
+        for (const img of images) {
+          if (img && img.src && img.width > 200 && img.height > 200 && !img.src.includes('logo')) {
+            image = img.src;
+            break;
+          }
         }
       }
+    } catch (imageError) {
+      console.warn('Error extracting image:', imageError);
+      image = ''; // Fallback to empty string
     }
     
     const url = window.location.href;
@@ -505,13 +538,13 @@ function extractProductInfo() {
 // Send product info to background script
 function sendProductInfo() {
   // First check if we need to clear data due to navigation
-  clearProductDataIfNeeded();
+  const wasCleared = clearProductDataIfNeeded();
   
   const productInfo = extractProductInfo();
   
   if (productInfo && productInfo.title && productInfo.price) {
     // Check if this is a new product
-    if (isNewProduct(productInfo)) {
+    if (isNewProduct(productInfo) || wasCleared) {
       console.log('New product detected:', productInfo);
       lastDetectedProduct = productInfo;
       
@@ -519,6 +552,8 @@ function sendProductInfo() {
       chrome.runtime.sendMessage({
         action: 'clearAndDetectProduct',
         data: productInfo
+      }).catch(error => {
+        console.error('Error sending product info:', error);
       });
     } else {
       console.log('Same product detected, skipping update');
@@ -530,6 +565,8 @@ function sendProductInfo() {
       lastDetectedProduct = null;
       chrome.runtime.sendMessage({
         action: 'clearProduct'
+      }).catch(error => {
+        console.error('Error clearing product:', error);
       });
     }
   }
@@ -537,6 +574,8 @@ function sendProductInfo() {
 
 // Initialize with debouncing
 function initialize() {
+  console.log('Initializing Owl Price Checker on:', window.location.href);
+  
   // Clear any pending detection
   if (detectionTimeout) {
     clearTimeout(detectionTimeout);
@@ -555,7 +594,7 @@ if (document.readyState === 'loading') {
   initialize();
 }
 
-// Enhanced URL change detection
+// Enhanced URL change detection for SPA navigation
 const observer = new MutationObserver((mutations) => {
   const url = location.href;
   if (url !== lastUrl) {
@@ -571,12 +610,24 @@ const observer = new MutationObserver((mutations) => {
 });
 
 // Observe for URL changes and DOM changes
-observer.observe(document.body, {
-  subtree: true,
-  childList: true,
-  attributes: true,
-  attributeFilter: ['href']
-});
+if (document.body) {
+  observer.observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['href']
+  });
+} else {
+  // If body not loaded yet, wait for it
+  document.addEventListener('DOMContentLoaded', () => {
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['href']
+    });
+  });
+}
 
 // Listen for popstate events (back/forward navigation)
 window.addEventListener('popstate', () => {
@@ -612,11 +663,31 @@ history.replaceState = function() {
 // Additional check on focus (when user returns to tab)
 window.addEventListener('focus', () => {
   const currentUrl = location.href;
-  if (currentUrl !== lastUrl) {
-    console.log('URL change detected on focus');
+  const currentDomain = location.hostname;
+  
+  if (currentUrl !== lastUrl || currentDomain !== lastDomain) {
+    console.log('URL/Domain change detected on focus');
     lastUrl = currentUrl;
+    lastDomain = currentDomain;
     lastDetectedProduct = null;
     initialize();
+  }
+});
+
+// Listen for visibility change
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    // Page became visible, check for changes
+    const currentUrl = location.href;
+    const currentDomain = location.hostname;
+    
+    if (currentUrl !== lastUrl || currentDomain !== lastDomain) {
+      console.log('URL/Domain change detected on visibility change');
+      lastUrl = currentUrl;
+      lastDomain = currentDomain;
+      lastDetectedProduct = null;
+      initialize();
+    }
   }
 });
 
@@ -626,13 +697,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ 
       status: 'ready', 
       site: detectSiteName(),
-      isProductPage: isProductPage()
+      isProductPage: isProductPage(),
+      currentUrl: window.location.href
     });
   } else if (request.action === 'popupOpened') {
-    // Re-detect product when popup opens, but only if current data is stale
-    const currentUrl = location.href;
-    if (currentUrl !== lastUrl || !lastDetectedProduct) {
-      sendProductInfo();
-    }
+    // Re-detect product when popup opens
+    console.log('Popup opened, re-detecting product');
+    sendProductInfo();
+  } else if (request.action === 'forceRefresh') {
+    // Force refresh product detection
+    console.log('Force refresh requested');
+    lastDetectedProduct = null;
+    initialize();
   }
 });
+
+// Periodic check for dynamic content changes (every 5 seconds)
+setInterval(() => {
+  // Only check if we're on a product page and haven't detected a product yet
+  if (isProductPage() && !lastDetectedProduct) {
+    console.log('Periodic check: Re-attempting product detection');
+    sendProductInfo();
+  }
+}, 5000);
+
+console.log('Owl Price Checker content script fully loaded and monitoring for changes');

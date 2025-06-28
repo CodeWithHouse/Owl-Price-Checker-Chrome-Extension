@@ -17,9 +17,17 @@ script.onload = function() {
   // Notify content script that popup was opened
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, {action: 'popupOpened'}).catch(() => {
-        // Content script might not be loaded on this page
-        console.log('Content script not available on this page');
+      // First try to ping the content script
+      chrome.tabs.sendMessage(tabs[0].id, {action: 'ping'}, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('Content script not available on this page');
+        } else if (response && response.status === 'ready') {
+          console.log('Content script ready on:', response.currentUrl);
+          // Send popup opened message
+          chrome.tabs.sendMessage(tabs[0].id, {action: 'popupOpened'}).catch(() => {
+            console.log('Error sending popup opened message');
+          });
+        }
       });
     }
   });
@@ -341,6 +349,9 @@ async function handleLogout() {
   }
   
   try {
+    // Calculate session duration
+    const sessionDuration = await calculateSessionDuration();
+    
     // Track logout before clearing data
     if (typeof analytics !== 'undefined' && currentUser) {
       analytics.track('User Signed Out', {
@@ -349,7 +360,7 @@ async function handleLogout() {
         first_name: currentUser.firstName,
         logout_method: 'manual',
         logout_source: 'popup_button',
-        session_duration_minutes: calculateSessionDuration(),
+        session_duration_minutes: sessionDuration,
         total_savings: currentUser.totalSavings || 0,
         total_coupons: currentUser.couponsEarned || 0,
         timestamp: new Date().toISOString()
@@ -359,7 +370,7 @@ async function handleLogout() {
       analytics.track('Session Ended', {
         user_id: currentUser.id,
         session_type: 'authenticated',
-        session_duration_minutes: calculateSessionDuration(),
+        session_duration_minutes: sessionDuration,
         logout_reason: 'user_initiated',
         timestamp: new Date().toISOString()
       });
@@ -389,13 +400,24 @@ async function handleLogout() {
 
 // Calculate session duration
 function calculateSessionDuration() {
-  const sessionStart = localStorage.getItem('sessionStartTime');
-  if (!sessionStart) return 0;
-  
-  const startTime = new Date(sessionStart);
-  const endTime = new Date();
-  const durationMs = endTime - startTime;
-  return Math.round(durationMs / (1000 * 60)); // Convert to minutes
+  try {
+    // Try to get session start time from Chrome storage instead of localStorage
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['sessionStartTime'], (data) => {
+        if (data.sessionStartTime) {
+          const startTime = new Date(data.sessionStartTime);
+          const endTime = new Date();
+          const durationMs = endTime - startTime;
+          resolve(Math.round(durationMs / (1000 * 60))); // Convert to minutes
+        } else {
+          resolve(0);
+        }
+      });
+    });
+  } catch (error) {
+    console.warn('Could not calculate session duration:', error);
+    return Promise.resolve(0);
+  }
 }
 
 // Add showError and showSuccess functions

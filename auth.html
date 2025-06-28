@@ -54,18 +54,18 @@
             <div class="input-group">
               <label for="firstName">First Name</label>
               <input type="text" id="firstName" name="firstName" required 
-                     placeholder="Enter your first name">
+                     placeholder="Enter your first name" tabindex="1">
             </div>
             
             <div class="input-group">
               <label for="email">Email Address</label>
               <input type="email" id="email" name="email" required 
-                     placeholder="Enter your email address">
+                     placeholder="Enter your email address" tabindex="2">
             </div>
             
             <div class="checkbox-group">
               <label class="checkbox-label">
-                <input type="checkbox" id="agreeTerms" required>
+                <input type="checkbox" id="agreeTerms" name="agreeTerms" required tabindex="3">
                 <span class="checkmark"></span>
                 I agree to the <a href="#" id="termsLink">Terms of Service</a> and <a href="#" id="privacyLink">Privacy Policy</a>
               </label>
@@ -73,13 +73,13 @@
             
             <div class="checkbox-group">
               <label class="checkbox-label">
-                <input type="checkbox" id="marketingEmails" checked>
+                <input type="checkbox" id="marketingEmails" name="marketingEmails" checked tabindex="4">
                 <span class="checkmark"></span>
                 Send me exclusive coupons and deals via email
               </label>
             </div>
             
-            <button type="submit" class="btn-primary" id="signupBtn">
+            <button type="submit" class="btn-primary" id="signupBtn" tabindex="5">
               <span class="btn-text">Create Account & Get Coupons</span>
               <div class="loading-spinner hidden"></div>
             </button>
@@ -99,11 +99,11 @@
           <form id="loginFormElement">
             <div class="input-group">
               <label for="loginEmail">Email Address</label>
-              <input type="email" id="loginEmail" name="email" required 
-                     placeholder="Enter your email address">
+              <input type="email" id="loginEmail" name="loginEmail" required 
+                     placeholder="Enter your email address" tabindex="1">
             </div>
             
-            <button type="submit" class="btn-primary" id="loginBtn">
+            <button type="submit" class="btn-primary" id="loginBtn" tabindex="2">
               <span class="btn-text">Sign In</span>
               <div class="loading-spinner hidden"></div>
             </button>

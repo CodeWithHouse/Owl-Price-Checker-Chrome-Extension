@@ -336,6 +336,10 @@ class AuthManager {
 
       // Track successful login with enhanced identify
       if (typeof analytics !== 'undefined') {
+        // Get additional data for enhanced identification
+        const totalLogins = await this.incrementLoginCount(user.id);
+        const loginStreak = await this.calculateLoginStreak(user.id);
+        
         // Enhanced user identification with comprehensive profile data
         analytics.identify(user.id, {
           firstName: user.firstName,
@@ -344,10 +348,10 @@ class AuthManager {
           user_type: 'returning',
           signup_date: user.createdAt,
           marketing_emails: user.marketingEmails,
-          total_logins: await this.incrementLoginCount(user.id),
+          total_logins: totalLogins,
           days_since_signup: this.calculateDaysSinceSignup(user.createdAt),
           account_status: 'active',
-          login_streak: await this.calculateLoginStreak(user.id),
+          login_streak: loginStreak,
           preferred_login_method: 'email'
         });
 
