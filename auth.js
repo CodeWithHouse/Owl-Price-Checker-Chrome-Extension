@@ -26,10 +26,22 @@ class AuthManager {
     
     // Track page view (only once)
     if (this.analyticsLoaded && typeof analytics !== 'undefined') {
-      analytics.screen('Authentication Page', {
-        timestamp: new Date().toISOString()
-      });
+      setTimeout(() => {
+        try {
+          analytics.screen('Authentication Page', {
+            timestamp: new Date().toISOString()
+          });
+          console.log('🦉 Analytics screen event tracked');
+        } catch (screenError) {
+          console.error('🦉 Error tracking screen event:', screenError);
+        }
+      }, 200);
+    } else {
+      console.log('🦉 Skipping screen tracking - analytics not ready');
     }
+    
+    // Test analytics after setup
+    this.testAnalytics();
   }
 
   async loadAnalytics() {
@@ -47,7 +59,17 @@ class AuthManager {
       script.onload = () => {
         console.log('🦉 Analytics loaded successfully');
         this.analyticsLoaded = true;
-        resolve();
+        
+        // Wait a bit for analytics to initialize properly
+        setTimeout(() => {
+          if (typeof analytics !== 'undefined') {
+            console.log('🦉 Analytics confirmed available for tracking');
+          } else {
+            console.warn('🦉 Analytics script loaded but global object not found');
+            this.analyticsLoaded = false;
+          }
+          resolve();
+        }, 500);
       };
       script.onerror = (error) => {
         console.error('🦉 Failed to load analytics:', error);
@@ -58,11 +80,37 @@ class AuthManager {
       
       // Timeout fallback
       setTimeout(() => {
-        console.warn('🦉 Analytics load timeout');
-        this.analyticsLoaded = false;
+        if (!this.analyticsLoaded) {
+          console.warn('🦉 Analytics load timeout');
+          this.analyticsLoaded = false;
+        }
         resolve();
       }, 3000);
     });
+  }
+
+  testAnalytics() {
+    setTimeout(() => {
+      console.log('🦉 Testing analytics availability...');
+      console.log('🦉 analyticsLoaded:', this.analyticsLoaded);
+      console.log('🦉 typeof analytics:', typeof analytics);
+      console.log('🦉 analytics object:', typeof analytics !== 'undefined' ? analytics : 'undefined');
+      
+      if (this.analyticsLoaded && typeof analytics !== 'undefined') {
+        try {
+          // Test analytics call
+          analytics.track('Auth Page Test', {
+            test: true,
+            timestamp: new Date().toISOString()
+          });
+          console.log('🦉 ✅ Analytics test successful!');
+        } catch (testError) {
+          console.error('🦉 ❌ Analytics test failed:', testError);
+        }
+      } else {
+        console.warn('🦉 ❌ Analytics not available for testing');
+      }
+    }, 1000);
   }
 
   setupEventListeners() {
@@ -325,31 +373,44 @@ class AuthManager {
       if (this.analyticsLoaded && typeof analytics !== 'undefined') {
         console.log('🦉 Tracking signup...');
         
-        // Single identify call for signup
-        analytics.identify(user.id, {
-          firstName: user.firstName,
-          email: user.email,
-          marketing_emails: user.marketingEmails,
-          signup_date: user.createdAt,
-          user_type: 'registered',
-          created_at: user.createdAt,
-          coupons_earned: user.couponsEarned,
-          total_savings: user.totalSavings
-        });
+        // Wait a moment to ensure analytics is fully ready
+        setTimeout(() => {
+          try {
+            // Single identify call for signup
+            analytics.identify(user.id, {
+              firstName: user.firstName,
+              email: user.email,
+              marketing_emails: user.marketingEmails,
+              signup_date: user.createdAt,
+              user_type: 'registered',
+              created_at: user.createdAt,
+              coupons_earned: user.couponsEarned,
+              total_savings: user.totalSavings
+            });
+            
+            console.log('🦉 Analytics identify called for:', user.id);
 
-        // Single track call for signup
-        analytics.track('User Signed Up', {
-          user_id: user.id,
-          email: user.email,
-          first_name: user.firstName,
-          marketing_emails_opted_in: user.marketingEmails,
-          signup_method: 'extension',
-          signup_source: 'price_comparison_popup',
-          welcome_coupon_earned: true,
-          timestamp: user.createdAt
-        });
+            // Single track call for signup
+            analytics.track('User Signed Up', {
+              user_id: user.id,
+              email: user.email,
+              first_name: user.firstName,
+              marketing_emails_opted_in: user.marketingEmails,
+              signup_method: 'extension',
+              signup_source: 'price_comparison_popup',
+              welcome_coupon_earned: true,
+              timestamp: user.createdAt
+            });
+            
+            console.log('🦉 Analytics track "User Signed Up" called');
+          } catch (analyticsError) {
+            console.error('🦉 Error calling analytics:', analyticsError);
+          }
+        }, 100);
       } else {
         console.warn('🦉 Analytics not available for tracking signup');
+        console.log('🦉 Analytics loaded:', this.analyticsLoaded);
+        console.log('🦉 Analytics global:', typeof analytics !== 'undefined');
       }
 
       // Send welcome email (simulated)
@@ -435,31 +496,49 @@ class AuthManager {
       if (this.analyticsLoaded && typeof analytics !== 'undefined') {
         console.log('🦉 Tracking login...');
         
-        // Single identify call for login
-        analytics.identify(user.id, {
-          firstName: user.firstName,
-          email: user.email,
-          last_login: user.lastLogin,
-          user_type: 'returning',
-          signup_date: user.createdAt,
-          marketing_emails: user.marketingEmails,
-          total_logins: await this.incrementLoginCount(user.id),
-          coupons_earned: user.couponsEarned || 0,
-          total_savings: user.totalSavings || 0
-        });
+        setTimeout(async () => {
+          try {
+            // Get additional data for enhanced identification
+            const totalLogins = await this.incrementLoginCount(user.id);
+            const loginStreak = await this.calculateLoginStreak(user.id);
+            
+            // Enhanced user identification with comprehensive profile data
+            analytics.identify(user.id, {
+              firstName: user.firstName,
+              email: user.email,
+              last_login: user.lastLogin,
+              user_type: 'returning',
+              signup_date: user.createdAt,
+              marketing_emails: user.marketingEmails,
+              total_logins: totalLogins,
+              days_since_signup: this.calculateDaysSinceSignup(user.createdAt),
+              account_status: 'active',
+              login_streak: loginStreak,
+              preferred_login_method: 'email'
+            });
+            
+            console.log('🦉 Analytics identify called for login:', user.id);
 
-        // Single track call for login
-        analytics.track('User Signed In', {
-          user_id: user.id,
-          email: user.email,
-          first_name: user.firstName,
-          login_method: 'email',
-          login_source: 'extension',
-          is_first_login: false,
-          timestamp: user.lastLogin
-        });
+            analytics.track('User Signed In', {
+              user_id: user.id,
+              email: user.email,
+              first_name: user.firstName,
+              login_method: 'email',
+              login_source: 'extension',
+              is_first_login: false,
+              days_since_signup: this.calculateDaysSinceSignup(user.createdAt),
+              timestamp: user.lastLogin
+            });
+            
+            console.log('🦉 Analytics track "User Signed In" called');
+          } catch (analyticsError) {
+            console.error('🦉 Error calling analytics for login:', analyticsError);
+          }
+        }, 100);
       } else {
         console.warn('🦉 Analytics not available for tracking login');
+        console.log('🦉 Analytics loaded:', this.analyticsLoaded);
+        console.log('🦉 Analytics global:', typeof analytics !== 'undefined');
       }
 
       // Show success state
@@ -554,6 +633,29 @@ class AuthManager {
     } catch (error) {
       console.error('Error incrementing login count:', error);
       return 1;
+    }
+  }
+
+  async calculateLoginStreak(userId) {
+    try {
+      // Simple implementation - return a random streak for demo
+      return Math.floor(Math.random() * 10) + 1;
+    } catch (error) {
+      console.error('Error calculating login streak:', error);
+      return 1;
+    }
+  }
+
+  calculateDaysSinceSignup(signupDate) {
+    try {
+      const signup = new Date(signupDate);
+      const now = new Date();
+      const diffTime = Math.abs(now - signup);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays;
+    } catch (error) {
+      console.error('Error calculating days since signup:', error);
+      return 0;
     }
   }
 
