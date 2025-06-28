@@ -342,40 +342,6 @@ Tested and optimized for:
    - Fill out store listing details
    - Submit for review (typically 1-3 days)
 
-### Enterprise Distribution
-
-For internal company use:
-1. Host the extension on your domain
-2. Use Chrome Enterprise policies
-3. Deploy via Google Admin Console
-
-## 📈 Monetization Ideas
-
-### Revenue Streams
-
-1. **Affiliate Commissions**: Add affiliate links to price comparisons
-2. **Premium Features**: Advanced analytics, unlimited coupons
-3. **White Label**: License to other companies
-4. **Sponsored Coupons**: Paid placement in coupon feed
-5. **Data Insights**: Aggregated shopping trend reports
-
-### Implementation Examples
-
-**Affiliate Links**:
-```javascript
-// Add affiliate parameters to comparison URLs
-const affiliateUrl = `${baseUrl}?tag=your-affiliate-id&ref=owlpricechecker`;
-```
-
-**Premium Tiers**:
-```javascript
-// Check user subscription status
-const isPremium = await checkPremiumStatus(user.id);
-if (isPremium) {
-  // Unlock advanced features
-  showPremiumFeatures();
-}
-```
 
 
 
